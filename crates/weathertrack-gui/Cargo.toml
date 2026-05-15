@@ -41,3 +41,4 @@ slint = { version = "1.11", default-features = false, features = [
 [build-dependencies]
 embuild = "0.33"
 slint-build = "1.11"
+toml = "0.8"

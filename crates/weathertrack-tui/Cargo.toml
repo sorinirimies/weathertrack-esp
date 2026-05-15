@@ -39,3 +39,4 @@ tui-piechart = { version = "0.3", default-features = false }
 
 [build-dependencies]
 embuild = "0.33"
+toml = "0.8"

@@ -1,0 +1,16 @@
+# WeatherTrack local configuration
+# Copy this file to config.toml and fill in your values:
+#   cp config.toml.example config.toml
+#
+# config.toml is gitignored — your credentials stay local.
+
+[wifi]
+ssid = "YOUR_WIFI_SSID"
+password = "YOUR_WIFI_PASSWORD"
+
+[location]
+# Leave as-is for automatic IP-based geolocation,
+# or set your coordinates manually.
+latitude = 46.77
+longitude = 23.60
+name = "Cluj-Napoca"

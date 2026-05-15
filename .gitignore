@@ -44,3 +44,4 @@ ehthumbs.db
 .env
 .env.*
 secrets.*
+config.toml

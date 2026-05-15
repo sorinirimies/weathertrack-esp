@@ -31,8 +31,8 @@ use mousefood::prelude::*;
 use ratatui::Terminal;
 use ws2812_esp32_rmt_driver::driver::Ws2812Esp32RmtDriver;
 
-const WIFI_SSID: &str = "Sorin_WLAN";
-const WIFI_PASS: &str = "Colosus1985";
+const WIFI_SSID: &str = env!("WIFI_SSID");
+const WIFI_PASS: &str = env!("WIFI_PASS");
 const FORECAST_DAYS: u8 = 7;
 const REFRESH_MS: u32 = 300_000;
 
