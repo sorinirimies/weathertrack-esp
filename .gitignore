@@ -1,16 +1,46 @@
-/.vscode
-/.embuild
-/target
-/dist
+# ── Rust / Cargo ──────────────────────────────────────────────────────
+/target/
+**/target/
+**/*.rs.bk
+Cargo.lock
+!Cargo.lock
+
+# Keep workspace lockfile, ignore per-crate lockfiles
+!/Cargo.lock
+crates/*/Cargo.lock
+
+# ── ESP-IDF / Embedded ───────────────────────────────────────────────
+**/.embuild/
+**/build/
+**/sdkconfig
+**/sdkconfig.old
+*.bin
+*.elf
+*.map
+
+# ── Editors & IDEs ───────────────────────────────────────────────────
+/.vscode/
+/.idea/
+*.iml
+.zed/settings.json
 *.swp
 *.swo
 *~
+\#*\#
+.#*
+
+# ── OS files ─────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-*.log
+Desktop.ini
+ehthumbs.db
 
-# ESP32 crate build artifacts (excluded from workspace)
-crates/weathertrack-tui/target/
-crates/weathertrack-tui/Cargo.lock
-crates/weathertrack-gui/target/
-crates/weathertrack-gui/Cargo.lock
+# ── Build output ─────────────────────────────────────────────────────
+/dist/
+*.log
+*.out
+
+# ── Secrets (never commit credentials) ───────────────────────────────
+.env
+.env.*
+secrets.*
