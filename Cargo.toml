@@ -1,0 +1,30 @@
+[workspace]
+members = [
+    "crates/weathertrack-core",
+]
+exclude = [
+    "crates/weathertrack-tui",
+    "crates/weathertrack-gui",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Sorin Irimies"]
+license = "MIT"
+repository = "https://192.168.1.44/sorin/esp32-c6-weatherman"
+
+[workspace.dependencies]
+weathertrack-core = { path = "crates/weathertrack-core", version = "0.1.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+log = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[profile.dev]
+opt-level = 0

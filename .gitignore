@@ -1,0 +1,16 @@
+/.vscode
+/.embuild
+/target
+/dist
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.log
+
+# ESP32 crate build artifacts (excluded from workspace)
+crates/weathertrack-tui/target/
+crates/weathertrack-tui/Cargo.lock
+crates/weathertrack-gui/target/
+crates/weathertrack-gui/Cargo.lock
