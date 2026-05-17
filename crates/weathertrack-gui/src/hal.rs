@@ -1,11 +1,15 @@
 //! Hardware abstraction: LED, WiFi, NVS persistence.
 
+use std::fs;
+use std::path::Path;
+
 use esp_idf_hal::modem::Modem;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     nvs::{EspDefaultNvsPartition, EspNvs, NvsDefault},
     wifi::{BlockingWifi, ClientConfiguration, Configuration, EspWifi},
 };
+use weathertrack_core::cache::WeatherSnapshot;
 use ws2812_esp32_rmt_driver::driver::{
     color::{LedPixelColor, LedPixelColorGrb24},
     Ws2812Esp32RmtDriver,
@@ -96,4 +100,86 @@ pub fn init_wifi(
     wifi.wait_netif_up().unwrap();
     log::info!("WiFi connected to {ssid}");
     wifi
+}
+
+// ── Weather Cache (NVS) ─────────────────────────────────────────────
+
+/// Save weather snapshot to NVS. Returns true on success.
+pub fn cache_save(nvs: &mut EspNvs<NvsDefault>, snapshot: &WeatherSnapshot) -> bool {
+    match snapshot.to_json() {
+        Ok(json) => {
+            if json.len() > 3900 {
+                log::warn!("Weather cache too large for NVS: {} bytes", json.len());
+                return false;
+            }
+            nvs_write(nvs, "weather_cache", &json);
+            log::info!("Weather cached to NVS ({} bytes)", json.len());
+            true
+        }
+        Err(e) => {
+            log::warn!("Failed to serialize weather cache: {e:?}");
+            false
+        }
+    }
+}
+
+/// Load weather snapshot from NVS. Returns None if not cached.
+pub fn cache_load(nvs: &EspNvs<NvsDefault>) -> Option<WeatherSnapshot> {
+    // NVS strings can be up to ~4KB, need a bigger buffer
+    let mut buf = [0u8; 4096];
+    let json = nvs.get_str("weather_cache", &mut buf).ok().flatten()?;
+    match WeatherSnapshot::from_json(json) {
+        Ok(snap) => {
+            log::info!("Loaded cached weather from NVS ({})", snap.location);
+            Some(snap)
+        }
+        Err(e) => {
+            log::warn!("Failed to parse weather cache: {e:?}");
+            None
+        }
+    }
+}
+
+// ── SD Card (optional) ──────────────────────────────────────────────
+
+const SD_MOUNT_POINT: &str = "/sdcard";
+const SD_CACHE_FILE: &str = "/sdcard/weather.json";
+
+/// Check if an SD card is mounted and accessible.
+pub fn sd_available() -> bool {
+    Path::new(SD_MOUNT_POINT).exists()
+}
+
+/// Save full forecast JSON to SD card.
+pub fn sd_save_forecast(json: &str) -> bool {
+    if !sd_available() {
+        return false;
+    }
+    match fs::write(SD_CACHE_FILE, json) {
+        Ok(_) => {
+            log::info!("Forecast saved to SD card ({} bytes)", json.len());
+            true
+        }
+        Err(e) => {
+            log::warn!("SD write failed: {e:?}");
+            false
+        }
+    }
+}
+
+/// Load full forecast JSON from SD card.
+pub fn sd_load_forecast() -> Option<String> {
+    if !sd_available() {
+        return None;
+    }
+    match fs::read_to_string(SD_CACHE_FILE) {
+        Ok(json) => {
+            log::info!("Loaded forecast from SD card ({} bytes)", json.len());
+            Some(json)
+        }
+        Err(e) => {
+            log::warn!("SD read failed: {e:?}");
+            None
+        }
+    }
 }

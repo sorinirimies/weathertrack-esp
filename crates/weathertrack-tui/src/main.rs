@@ -112,6 +112,36 @@ fn main() {
         ui::splash::draw_status(&mut display, 1, "Config OK", Rgb565::GREEN);
     }
 
+    // ── Load cached weather (instant boot display) ──────────────────
+    let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
+    if let Some(snapshot) = hal::cache_load(&nvs) {
+        ui::splash::draw_status(&mut display, 2, "Cached weather loaded", Rgb565::GREEN);
+        log::info!("Showing cached weather from {}", snapshot.timestamp);
+        let cached_current = snapshot.to_current_weather();
+        // Build a minimal forecast from cache
+        let cached_forecast = weathertrack_core::Forecast {
+            current: Some(cached_current),
+            hourly: Vec::new(),
+            daily: Vec::new(),
+            timezone: "auto".to_string(),
+            location: None,
+        };
+        app::update(&mut model, app::Msg::WeatherLoaded(cached_forecast));
+    }
+
+    // ── SD card check ───────────────────────────────────────────────
+    let has_sd = hal::sd_available();
+    if has_sd {
+        ui::splash::draw_status(&mut display, 2, "SD card detected", Rgb565::GREEN);
+        // Try loading full forecast from SD
+        if let Some(json) = hal::sd_load_forecast() {
+            if let Ok(f) = weathertrack_core::cache::deserialize_forecast(&json) {
+                log::info!("Loaded full forecast from SD card");
+                app::update(&mut model, app::Msg::WeatherLoaded(f));
+            }
+        }
+    }
+
     // ── WiFi ────────────────────────────────────────────────────────
     ui::splash::draw_status(&mut display, 2, "Connecting WiFi...", Rgb565::WHITE);
     hal::set_led(255, 165, 0, &mut led);
@@ -154,18 +184,33 @@ fn main() {
     ui::splash::draw_status(&mut display, 4, "Fetching weather...", Rgb565::WHITE);
     hal::set_led(0, 0, 255, &mut led);
 
-    let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
-
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
         Ok(f) => {
+            // Cache to NVS
+            if let Some(c) = f.current.as_ref() {
+                let snapshot =
+                    weathertrack_core::cache::WeatherSnapshot::from_current(c, &cfg.location);
+                hal::cache_save(&mut nvs, &snapshot);
+            }
+            // Cache to SD if available
+            if has_sd {
+                if let Ok(json) = weathertrack_core::cache::serialize_forecast(&f) {
+                    hal::sd_save_forecast(&json);
+                }
+            }
             app::update(&mut model, app::Msg::WeatherLoaded(f));
             ui::splash::draw_status(&mut display, 4, "Weather OK", Rgb565::GREEN);
             hal::set_led(0, 255, 0, &mut led);
         }
         Err(e) => {
             app::update(&mut model, app::Msg::WeatherError(e.to_string()));
-            ui::splash::draw_status(&mut display, 4, "Weather FAILED", Rgb565::RED);
-            hal::set_led(255, 0, 0, &mut led);
+            ui::splash::draw_status(
+                &mut display,
+                4,
+                "Weather FAILED (using cache)",
+                Rgb565::YELLOW,
+            );
+            hal::set_led(255, 165, 0, &mut led);
         }
     }
 
@@ -207,6 +252,19 @@ fn main() {
             hal::set_led(0, 0, 255, &mut led);
             match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
                 Ok(f) => {
+                    // Update cache
+                    if let Some(c) = f.current.as_ref() {
+                        let snapshot = weathertrack_core::cache::WeatherSnapshot::from_current(
+                            c,
+                            &model.location,
+                        );
+                        hal::cache_save(&mut nvs, &snapshot);
+                    }
+                    if has_sd {
+                        if let Ok(json) = weathertrack_core::cache::serialize_forecast(&f) {
+                            hal::sd_save_forecast(&json);
+                        }
+                    }
                     app::update(&mut model, app::Msg::WeatherLoaded(f));
                     hal::set_led(0, 255, 0, &mut led);
                 }
