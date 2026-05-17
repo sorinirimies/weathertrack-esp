@@ -4,20 +4,20 @@
 def main [] {
     let test_files = (ls scripts/tests/test_*.nu | get name)
     let total = ($test_files | length)
-    mut passed = 0
-    mut failed = 0
 
-    for file in $test_files {
+    let results = ($test_files | each {|file|
         print $"Running ($file)..."
-        try {
-            nu $file
-            $passed = $passed + 1
+        let ok = (do { nu $file } | complete | get exit_code) == 0
+        if $ok {
             print $"  PASSED"
-        } catch {
-            $failed = $failed + 1
+        } else {
             print $"  FAILED"
         }
-    }
+        $ok
+    })
+
+    let passed = ($results | where $it == true | length)
+    let failed = ($results | where $it == false | length)
 
     print $"\nResults: ($passed)/($total) passed, ($failed) failed"
     if $failed > 0 { exit 1 }

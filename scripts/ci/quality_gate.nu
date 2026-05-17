@@ -5,33 +5,50 @@
 def header [msg: string] { print $"\n(ansi cyan_bold)═══ ($msg) ═══(ansi reset)" }
 def step [n: int, total: int, msg: string] { print $"  (ansi green_bold)▶(ansi reset) [($n)/($total)] ($msg)" }
 def ok [msg: string] { print $"  (ansi green)✔(ansi reset) ($msg)" }
-def fail [msg: string] { print $"  (ansi red_bold)✖(ansi reset) ($msg)" }
+def fail_msg [msg: string] { print $"  (ansi red_bold)✖(ansi reset) ($msg)" }
+
+def run-step [name: string, cmd: string]: nothing -> bool {
+    let result = (do { nu -c $cmd } | complete)
+    if $result.exit_code == 0 {
+        ok $"($name) OK"
+        true
+    } else {
+        fail_msg $"($name) FAILED"
+        false
+    }
+}
 
 def main [--skip-fmt, --skip-test, --skip-nu] {
     header "Quality Gate"
-    mut failures = []
     let total = 4
 
-    if not $skip_fmt {
+    let r1 = if not $skip_fmt {
         step 1 $total "Formatting"
-        try { cargo fmt --all -- --check; ok "Format OK" } catch { $failures = ($failures | append "fmt"); fail "Format FAILED" }
-    } else { step 1 $total "Formatting (skipped)" }
+        run-step "Format" "cargo fmt --all -- --check"
+    } else { step 1 $total "Formatting (skipped)"; true }
 
     step 2 $total "Clippy"
-    try { cargo clippy -p weathertrack-core --all-targets --all-features -- -D warnings -A deprecated; ok "Clippy OK" } catch { $failures = ($failures | append "clippy"); fail "Clippy FAILED" }
+    let r2 = (run-step "Clippy" "cargo clippy -p weathertrack-core --all-targets --all-features -- -D warnings -A deprecated")
 
-    if not $skip_test {
+    let r3 = if not $skip_test {
         step 3 $total "Rust tests"
-        try { cargo test -p weathertrack-core --all-features --all-targets; ok "Tests OK" } catch { $failures = ($failures | append "test"); fail "Tests FAILED" }
-    } else { step 3 $total "Rust tests (skipped)" }
+        run-step "Tests" "cargo test -p weathertrack-core --all-features --all-targets"
+    } else { step 3 $total "Rust tests (skipped)"; true }
 
-    if not $skip_nu {
+    let r4 = if not $skip_nu {
         step 4 $total "Nu tests"
-        try { nu scripts/tests/run_all.nu; ok "Nu tests OK" } catch { $failures = ($failures | append "nu-tests"); fail "Nu tests FAILED" }
-    } else { step 4 $total "Nu tests (skipped)" }
+        run-step "Nu tests" "nu scripts/tests/run_all.nu"
+    } else { step 4 $total "Nu tests (skipped)"; true }
 
-    if ($failures | length) > 0 {
-        header $"Quality Gate FAILED: ($failures | str join ', ')"
+    let all_passed = [$r1, $r2, $r3, $r4] | all {|r| $r == true }
+
+    if not $all_passed {
+        let failures = ([$r1, $r2, $r3, $r4]
+            | zip ["fmt", "clippy", "test", "nu-tests"]
+            | where {|pair| $pair.0 == false }
+            | each {|pair| $pair.1 }
+            | str join ", ")
+        header $"Quality Gate FAILED: ($failures)"
         exit 1
     }
     header "Quality Gate PASSED"
