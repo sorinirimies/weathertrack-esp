@@ -5,11 +5,16 @@
 //!
 //! This crate is intentionally platform-agnostic — no UI, HTTP client, or ESP32 dependencies.
 
+pub mod app;
 pub mod cache;
 pub mod forecaster;
 pub mod location;
 pub mod types;
 pub mod wmo;
+
+// Shared constants
+pub const FORECAST_DAYS: u8 = 7;
+pub const REFRESH_MS: u32 = 300_000;
 
 pub use cache::{deserialize_forecast, serialize_forecast, WeatherSnapshot};
 pub use forecaster::{build_current_url, build_forecast_url, parse_current, parse_forecast};

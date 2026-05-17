@@ -2,10 +2,12 @@
 //! WeatherTrack TUI — entry point.
 //! Hardware init, splash, then Elm event loop.
 
-mod app;
 mod hal;
 mod net;
 mod ui;
+
+use weathertrack_core::app;
+use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
 
 use embedded_graphics::{
     draw_target::DrawTarget, mono_font::ascii::FONT_10X20, pixelcolor::Rgb565, prelude::*,
@@ -33,9 +35,6 @@ use ws2812_esp32_rmt_driver::driver::Ws2812Esp32RmtDriver;
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
-const FORECAST_DAYS: u8 = 7;
-const REFRESH_MS: u32 = 300_000;
-
 const DEFAULTS: hal::ConfigDefaults = hal::ConfigDefaults {
     ssid: WIFI_SSID,
     pass: WIFI_PASS,
@@ -160,8 +159,16 @@ fn main() {
         if let Ok(loc) = net::fetch_ip_location() {
             cfg.lat = loc.latitude;
             cfg.lon = loc.longitude;
-            cfg.location = loc.name;
+            cfg.location = loc.name.clone();
             hal::save_config(&mut nvs, &cfg);
+            app::update(
+                &mut model,
+                app::Msg::LocationDetected {
+                    name: loc.name,
+                    lat: loc.latitude,
+                    lon: loc.longitude,
+                },
+            );
             ui::splash::draw_status(
                 &mut display,
                 3,

@@ -6,8 +6,8 @@ pub mod hero;
 pub mod splash;
 pub mod style;
 
-use crate::app::Model;
 use ratatui::Frame;
+use weathertrack_core::app::Model;
 
 /// Render the current page based on the model state.
 pub fn view(f: &mut Frame, model: &Model) {

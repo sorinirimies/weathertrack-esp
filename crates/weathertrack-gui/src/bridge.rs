@@ -66,7 +66,7 @@ pub fn sync_alerts(app: &WeatherApp, alerts: &[WeatherAlert]) {
 }
 
 /// Sync entire model to Slint UI.
-pub fn sync_all(app: &WeatherApp, model: &crate::app::Model) {
+pub fn sync_all(app: &WeatherApp, model: &weathertrack_core::app::Model) {
     if let Some(ref f) = model.forecast {
         if let Some(ref c) = f.current {
             sync_current(app, c, &model.location);
@@ -74,6 +74,7 @@ pub fn sync_all(app: &WeatherApp, model: &crate::app::Model) {
         sync_forecast(app, f);
         sync_alerts(app, &model.alerts);
     }
-    app.set_current_page(model.page);
-    app.set_page_info(format!("{}/{}", model.page + 1, model.total_pages).into());
+    app.set_current_page(model.page as i32);
+    let total = model.total_pages();
+    app.set_page_info(format!("{}/{}", model.page + 1, total).into());
 }

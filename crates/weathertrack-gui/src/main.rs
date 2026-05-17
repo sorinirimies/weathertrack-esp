@@ -2,11 +2,13 @@
 //! WeatherTrack GUI — entry point.
 //! Hardware init, Slint platform, then Elm event loop.
 
-mod app;
 mod bridge;
 mod hal;
 mod net;
 mod platform;
+
+use weathertrack_core::app;
+use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
 
 use embedded_graphics::{draw_target::DrawTarget, pixelcolor::Rgb565, prelude::*};
 use esp_idf_hal::{
@@ -32,10 +34,6 @@ slint::include_modules!();
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
-const FORECAST_DAYS: u8 = 7;
-const REFRESH_MS: u32 = 300_000;
-const TOTAL_PAGES: i32 = 3;
-
 const DEFAULTS: hal::ConfigDefaults = hal::ConfigDefaults {
     ssid: WIFI_SSID,
     pass: WIFI_PASS,
@@ -147,7 +145,7 @@ fn main() {
     window.request_redraw();
     platform::render(&window, &mut display);
 
-    let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon, TOTAL_PAGES);
+    let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
         Ok(f) => {
