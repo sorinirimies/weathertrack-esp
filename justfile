@@ -46,26 +46,48 @@ install-tools:
     @command -v cargo-outdated >/dev/null 2>&1 || just install-cargo-outdated
     @echo "All tools installed!"
 
-# ── Build ─────────────────────────────────────────────────────────────────────
+# ── Build ─────────────────────────────────────────────────────────────────────────────
+
+# Generate sdkconfig.defaults with absolute partition table paths (machine-specific)
+gen-sdkconfig:
+    #!/usr/bin/env sh
+    for crate in weathertrack-tui weathertrack-gui; do
+        dir="crates/$crate"
+        csv="$dir/partitions.csv"
+        out="$dir/sdkconfig.defaults"
+        abs=$(readlink -f "$csv")
+        printf '%s\n' \
+            'CONFIG_ESP_MAIN_TASK_STACK_SIZE=65536' \
+            'CONFIG_ESP_WIFI_ENABLED=y' \
+            'CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y' \
+            'CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y' \
+            'CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y' \
+            'CONFIG_PARTITION_TABLE_CUSTOM=y' \
+            "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"$abs\"" \
+            'CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y' \
+            'CONFIG_ESPTOOLPY_FLASHSIZE="8MB"' \
+            > "$out"
+        echo "Generated $out (partition: $abs)"
+    done
 
 # Build the core library (host target)
 build-core:
     cargo build -p weathertrack-core
 
 # Build the TUI crate (ESP32 target)
-build-tui:
+build-tui: gen-sdkconfig
     cd crates/weathertrack-tui && cargo build
 
 # Build the GUI crate (ESP32 target)
-build-gui:
+build-gui: gen-sdkconfig
     cd crates/weathertrack-gui && cargo build
 
 # Build release for TUI
-build-tui-release:
+build-tui-release: gen-sdkconfig
     cd crates/weathertrack-tui && cargo build --release
 
 # Build release for GUI
-build-gui-release:
+build-gui-release: gen-sdkconfig
     cd crates/weathertrack-gui && cargo build --release
 
 # Remove build artifacts
@@ -75,19 +97,19 @@ clean:
 # ── Flash & Run ───────────────────────────────────────────────────────────────
 
 # Flash and monitor the TUI on ESP32
-run-tui:
+run-tui: gen-sdkconfig
     cd crates/weathertrack-tui && cargo run
 
 # Flash and monitor the GUI on ESP32
-run-gui:
+run-gui: gen-sdkconfig
     cd crates/weathertrack-gui && cargo run
 
 # Flash release TUI
-run-tui-release:
+run-tui-release: gen-sdkconfig
     cd crates/weathertrack-tui && cargo run --release
 
 # Flash release GUI
-run-gui-release:
+run-gui-release: gen-sdkconfig
     cd crates/weathertrack-gui && cargo run --release
 
 # ── Test ──────────────────────────────────────────────────────────────────────

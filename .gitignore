@@ -9,11 +9,12 @@ Cargo.lock
 !/Cargo.lock
 crates/*/Cargo.lock
 
-# ── ESP-IDF / Embedded ───────────────────────────────────────────────
+# ── ESP-IDF / Embedded ───────────────────────────────────────
 **/.embuild/
 **/build/
 **/sdkconfig
 **/sdkconfig.old
+**/sdkconfig.defaults
 *.bin
 *.elf
 *.map
