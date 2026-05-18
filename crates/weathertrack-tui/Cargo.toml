@@ -33,10 +33,6 @@ anyhow = "1"
 ratatui = { version = "0.30", default-features = false }
 mousefood = { git = "https://github.com/ratatui/mousefood", default-features = false, features = ["fonts"] }
 
-# Custom TUI widgets by Sorin
-tui-spinner = { version = "0.2", default-features = false }
-tui-piechart = { version = "0.3", default-features = false }
-
 [build-dependencies]
 embuild = "0.33"
 toml = "0.8"

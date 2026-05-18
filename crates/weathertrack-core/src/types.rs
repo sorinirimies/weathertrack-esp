@@ -100,7 +100,7 @@ pub struct WeatherDescription {
 }
 
 /// Geographic location.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Location {
     pub name: String,
     pub country: String,
@@ -130,7 +130,7 @@ impl Default for Location {
 }
 
 /// Current weather snapshot.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CurrentWeather {
     pub timestamp: String,
     pub temperature: f64,
@@ -155,7 +155,7 @@ pub struct CurrentWeather {
 }
 
 /// Hourly forecast entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HourlyForecast {
     pub time: String,
     pub temperature: f64,
@@ -176,7 +176,7 @@ pub struct HourlyForecast {
 }
 
 /// Daily forecast entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DailyForecast {
     pub date: String,
     pub sunrise: String,
@@ -205,7 +205,7 @@ pub struct DailyForecast {
 }
 
 /// Combined forecast data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Forecast {
     pub current: Option<CurrentWeather>,
     pub hourly: Vec<HourlyForecast>,
@@ -227,7 +227,7 @@ impl Default for Forecast {
 }
 
 /// Weather alert / warning.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WeatherAlert {
     pub sender: String,
     pub event: String,

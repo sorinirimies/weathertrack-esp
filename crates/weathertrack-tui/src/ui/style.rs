@@ -16,7 +16,8 @@ pub const fn dim() -> Style {
 
 pub fn wind_dir(deg: f64) -> &'static str {
     const D: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-    D[((deg + 22.5) as usize / 45) % 8]
+    let idx = (((deg % 360.0 + 360.0) % 360.0 + 22.5) as usize / 45) % 8;
+    D[idx]
 }
 
 pub fn weather_icon(cond: &weathertrack_core::WeatherCondition) -> &'static str {
