@@ -5,6 +5,7 @@ members = [
 exclude = [
     "crates/weathertrack-tui",
     "crates/weathertrack-gui",
+    "crates/weathertrack-hal",
 ]
 resolver = "2"
 

@@ -3,13 +3,11 @@
 //! Hardware init, Slint platform, then Elm event loop.
 
 mod bridge;
-#[allow(dead_code)]
-mod hal;
-mod net;
 mod platform;
 
 use weathertrack_core::app;
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
+use weathertrack_hal::{led, net, nvs, wifi};
 
 use embedded_graphics::{draw_target::DrawTarget, pixelcolor::Rgb565, prelude::*};
 use esp_idf_hal::{
@@ -35,7 +33,7 @@ slint::include_modules!();
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
-const DEFAULTS: hal::ConfigDefaults = hal::ConfigDefaults {
+const DEFAULTS: nvs::ConfigDefaults = nvs::ConfigDefaults {
     ssid: WIFI_SSID,
     pass: WIFI_PASS,
     lat: 46.77,
@@ -53,8 +51,8 @@ fn main() {
     let nvs_part = EspDefaultNvsPartition::take().unwrap();
 
     // ── LED ─────────────────────────────────────────────────────────
-    let mut led = Ws2812Esp32RmtDriver::new(p.rmt.channel0, p.pins.gpio8).unwrap();
-    hal::set_led(255, 0, 0, &mut led);
+    let mut led_drv = Ws2812Esp32RmtDriver::new(p.rmt.channel0, p.pins.gpio8).unwrap();
+    led::set_led(255, 0, 0, &mut led_drv);
 
     // ── Display ─────────────────────────────────────────────────────
     let mut backlight = PinDriver::output(p.pins.gpio22).unwrap();
@@ -112,20 +110,20 @@ fn main() {
     window.request_redraw();
     platform::render(&window, &mut display);
 
-    let mut nvs = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
-    let mut cfg = hal::load_config(&nvs, &DEFAULTS);
+    let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
+    let mut cfg = nvs::load_config(&nvs_store, &DEFAULTS);
     if !cfg.from_nvs {
-        hal::save_config(&mut nvs, &cfg);
+        nvs::save_config(&mut nvs_store, &cfg);
     }
 
     // ── WiFi ────────────────────────────────────────────────────────
     slint_app.set_loading_status("Connecting WiFi...".into());
     window.request_redraw();
     platform::render(&window, &mut display);
-    hal::set_led(255, 165, 0, &mut led);
+    led::set_led(255, 165, 0, &mut led_drv);
 
-    let _wifi = hal::init_wifi(p.modem, sys_loop, nvs_part, &cfg.ssid, &cfg.pass);
-    hal::set_led(0, 0, 255, &mut led);
+    let _wifi = wifi::connect(p.modem, sys_loop, nvs_part, &cfg.ssid, &cfg.pass).unwrap();
+    led::set_led(0, 0, 255, &mut led_drv);
 
     // ── Geolocation ─────────────────────────────────────────────────
     let is_default = (cfg.lat - DEFAULTS.lat).abs() < 0.01 && (cfg.lon - DEFAULTS.lon).abs() < 0.01;
@@ -137,7 +135,7 @@ fn main() {
             cfg.lat = loc.latitude;
             cfg.lon = loc.longitude;
             cfg.location = loc.name;
-            hal::save_config(&mut nvs, &cfg);
+            nvs::save_config(&mut nvs_store, &cfg);
         }
     }
 
@@ -151,14 +149,14 @@ fn main() {
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
         Ok(f) => {
             app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
-            hal::set_led(0, 255, 0, &mut led);
+            led::set_led(0, 255, 0, &mut led_drv);
         }
         Err(e) => {
             app::update(&mut model, app::Msg::WeatherError(e.to_string()));
             slint_app.set_loading_status(format!("Error: {e}").into());
             window.request_redraw();
             platform::render(&window, &mut display);
-            hal::set_led(255, 0, 0, &mut led);
+            led::set_led(255, 0, 0, &mut led_drv);
             FreeRtos::delay_ms(3000);
         }
     }
@@ -187,16 +185,16 @@ fn main() {
         platform::render(&window, &mut display);
 
         if ticks.wrapping_sub(last_fetch) >= REFRESH_MS {
-            hal::set_led(0, 0, 255, &mut led);
+            led::set_led(0, 0, 255, &mut led_drv);
             match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
                 Ok(f) => {
                     app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
                     bridge::sync_all(&slint_app, &model);
-                    hal::set_led(0, 255, 0, &mut led);
+                    led::set_led(0, 255, 0, &mut led_drv);
                 }
                 Err(e) => {
                     app::update(&mut model, app::Msg::WeatherError(e.to_string()));
-                    hal::set_led(255, 165, 0, &mut led);
+                    led::set_led(255, 165, 0, &mut led_drv);
                 }
             }
             last_fetch = ticks;

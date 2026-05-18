@@ -20,6 +20,7 @@ opt-level = "z"
 
 [dependencies]
 weathertrack-core = { path = "../weathertrack-core", default-features = false }
+weathertrack-hal = { path = "../weathertrack-hal" }
 log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["experimental"] }
 esp-idf-hal = "0.45.2"

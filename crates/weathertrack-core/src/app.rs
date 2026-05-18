@@ -118,10 +118,7 @@ mod tests {
                     sunset: "16:45".to_string(),
                     temp_max: 25.0,
                     temp_min: 10.0,
-                    temp_morning: 15.0,
-                    temp_day: 25.0,
-                    temp_evening: 18.0,
-                    temp_night: 10.0,
+
                     feels_like_max: 23.0,
                     feels_like_min: 8.0,
                     pressure: 1015.0,

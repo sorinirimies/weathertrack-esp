@@ -14,11 +14,7 @@ pub const fn dim() -> Style {
     Style::new().fg(Color::DarkGray)
 }
 
-pub fn wind_dir(deg: f64) -> &'static str {
-    const D: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-    let idx = (((deg % 360.0 + 360.0) % 360.0 + 22.5) as usize / 45) % 8;
-    D[idx]
-}
+pub use weathertrack_core::wind_direction_label as wind_dir;
 
 pub fn weather_icon(cond: &weathertrack_core::WeatherCondition) -> &'static str {
     use weathertrack_core::WeatherCondition::*;

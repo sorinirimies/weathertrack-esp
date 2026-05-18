@@ -7,8 +7,8 @@
 
 pub mod app;
 pub mod cache;
-pub mod forecaster;
 pub mod location;
+pub mod openmeteo;
 pub mod types;
 pub mod wmo;
 
@@ -17,7 +17,8 @@ pub const FORECAST_DAYS: u8 = 7;
 pub const REFRESH_MS: u32 = 300_000;
 
 pub use cache::{deserialize_forecast, serialize_forecast, WeatherSnapshot};
-pub use forecaster::{build_current_url, build_forecast_url, parse_current, parse_forecast};
 pub use location::{parse_ip_location, IPAPI_URL};
+pub use openmeteo::{build_current_url, build_forecast_url, parse_current, parse_forecast};
+pub use types::wind_direction_label;
 pub use types::*;
 pub use wmo::{wmo_code_to_condition, wmo_code_to_description};

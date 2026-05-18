@@ -17,7 +17,7 @@ const DAILY_PARAMS: &str = "weather_code,temperature_2m_max,temperature_2m_min,a
 /// Build the URL for fetching current weather data.
 pub fn build_current_url(lat: f64, lon: f64) -> String {
     format!(
-        "{}/forecast?latitude={}&longitude={}&current={}&daily=sunrise,sunset&timezone=auto&forecast_days=1",
+        "{}/forecast?latitude={}&longitude={}&current={}&daily=sunrise,sunset,uv_index_max&timezone=auto&forecast_days=1",
         OPENMETEO_BASE_URL, lat, lon, CURRENT_PARAMS
     )
 }
@@ -72,7 +72,11 @@ pub fn parse_current(json: &Value) -> Result<CurrentWeather> {
         rain: current["rain"].as_f64().unwrap_or(0.0),
         snowfall: current["snowfall"].as_f64().unwrap_or(0.0),
         visibility: 10000.0,
-        uv_index: 0.0,
+        uv_index: daily["uv_index_max"]
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0),
         sunrise,
         sunset,
     })
@@ -148,10 +152,7 @@ fn parse_daily(json: &Value) -> Result<Vec<DailyForecast>> {
             sunset: get_str_at(&daily["sunset"], i),
             temp_max,
             temp_min,
-            temp_morning: temp_min + 0.25 * (temp_max - temp_min),
-            temp_day: temp_max,
-            temp_evening: temp_min + 0.5 * (temp_max - temp_min),
-            temp_night: temp_min,
+
             feels_like_max: get_f64_at(&daily["apparent_temperature_max"], i),
             feels_like_min: get_f64_at(&daily["apparent_temperature_min"], i),
             pressure: 1013.0,

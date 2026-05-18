@@ -183,10 +183,7 @@ pub struct DailyForecast {
     pub sunset: String,
     pub temp_max: f64,
     pub temp_min: f64,
-    pub temp_morning: f64,
-    pub temp_day: f64,
-    pub temp_evening: f64,
-    pub temp_night: f64,
+
     pub feels_like_max: f64,
     pub feels_like_min: f64,
     pub pressure: f64,
@@ -324,4 +321,11 @@ impl WeatherCondition {
     pub fn icon_label(&self) -> String {
         format!("{} {}", self.icon(), self.short_label())
     }
+}
+
+/// Wind direction degrees to compass label.
+pub fn wind_direction_label(deg: f64) -> &'static str {
+    const D: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    let idx = (((deg % 360.0 + 360.0) % 360.0 + 22.5) as usize / 45) % 8;
+    D[idx]
 }

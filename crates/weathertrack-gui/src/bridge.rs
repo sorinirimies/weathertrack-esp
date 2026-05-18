@@ -1,13 +1,7 @@
 //! Bridge: map weathertrack-core types → Slint generated types.
 
 use crate::{AlertData, ForecastDay, WeatherApp, WeatherData};
-use weathertrack_core::{CurrentWeather, Forecast, WeatherAlert};
-
-fn wind_dir(deg: f64) -> &'static str {
-    const D: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-    let idx = (((deg % 360.0 + 360.0) % 360.0 + 22.5) as usize / 45) % 8;
-    D[idx]
-}
+use weathertrack_core::{wind_direction_label, CurrentWeather, Forecast, WeatherAlert};
 
 pub fn sync_current(app: &WeatherApp, w: &CurrentWeather, location: &str) {
     let sr = w.sunrise.split('T').nth(1).unwrap_or("--:--");
@@ -20,7 +14,12 @@ pub fn sync_current(app: &WeatherApp, w: &CurrentWeather, location: &str) {
         condition_icon: w.condition.icon().into(),
         humidity: format!("{:.0}", w.humidity).into(),
         pressure: format!("{:.0}", w.pressure).into(),
-        wind_speed: format!("{:.0} {}", w.wind_speed, wind_dir(w.wind_direction)).into(),
+        wind_speed: format!(
+            "{:.0} {}",
+            w.wind_speed,
+            wind_direction_label(w.wind_direction)
+        )
+        .into(),
         wind_gusts: format!("{:.0}", w.wind_gusts).into(),
         cloud_cover: format!("{:.0}", w.cloud_cover).into(),
         precipitation: format!("{:.1}", w.precipitation).into(),

@@ -1,4 +1,4 @@
-//! Network: HTTP client, weather fetching, IP geolocation.
+//! HTTP client, weather fetching, IP geolocation.
 
 use esp_idf_svc::http::client::{Configuration as HttpConfig, EspHttpConnection, Method};
 use weathertrack_core::{
@@ -23,6 +23,7 @@ pub fn http_get(url: &str) -> anyhow::Result<Vec<u8>> {
     let mut body = Vec::with_capacity(16_384);
     let mut buf = [0u8; 4096];
     loop {
+        use esp_idf_svc::io::Read;
         match conn.read(&mut buf) {
             Ok(0) | Err(_) => break,
             Ok(n) => body.extend_from_slice(&buf[..n]),

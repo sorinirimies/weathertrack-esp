@@ -2,12 +2,11 @@
 //! WeatherTrack TUI — entry point.
 //! Hardware init, splash, then Elm event loop.
 
-mod hal;
-mod net;
 mod ui;
 
 use weathertrack_core::app;
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
+use weathertrack_hal::{led, net, nvs, sd, wifi};
 
 use embedded_graphics::{
     draw_target::DrawTarget, mono_font::ascii::FONT_10X20, pixelcolor::Rgb565, prelude::*,
@@ -35,7 +34,7 @@ use ws2812_esp32_rmt_driver::driver::Ws2812Esp32RmtDriver;
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
-const DEFAULTS: hal::ConfigDefaults = hal::ConfigDefaults {
+const DEFAULTS: nvs::ConfigDefaults = nvs::ConfigDefaults {
     ssid: WIFI_SSID,
     pass: WIFI_PASS,
     lat: 46.77,
@@ -53,8 +52,8 @@ fn main() {
     let nvs_part = EspDefaultNvsPartition::take().unwrap();
 
     // ── LED ─────────────────────────────────────────────────────────
-    let mut led = Ws2812Esp32RmtDriver::new(p.rmt.channel0, p.pins.gpio8).unwrap();
-    hal::set_led(255, 0, 0, &mut led);
+    let mut led_drv = Ws2812Esp32RmtDriver::new(p.rmt.channel0, p.pins.gpio8).unwrap();
+    led::set_led(255, 0, 0, &mut led_drv);
 
     // ── Display ─────────────────────────────────────────────────────
     let mut backlight = PinDriver::output(p.pins.gpio22).unwrap();
@@ -102,10 +101,10 @@ fn main() {
 
     // ── NVS config ──────────────────────────────────────────────────
     ui::splash::draw_status(&mut display, 1, "Reading config...", Rgb565::WHITE);
-    let mut nvs = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
-    let mut cfg = hal::load_config(&nvs, &DEFAULTS);
+    let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
+    let mut cfg = nvs::load_config(&nvs_store, &DEFAULTS);
     if !cfg.from_nvs {
-        hal::save_config(&mut nvs, &cfg);
+        nvs::save_config(&mut nvs_store, &cfg);
         ui::splash::draw_status(&mut display, 1, "Using defaults", Rgb565::YELLOW);
     } else {
         ui::splash::draw_status(&mut display, 1, "Config OK", Rgb565::GREEN);
@@ -113,7 +112,7 @@ fn main() {
 
     // ── Load cached weather (instant boot display) ──────────────────
     let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
-    if let Some(snapshot) = hal::cache_load(&nvs) {
+    if let Some(snapshot) = nvs::cache_load(&nvs_store) {
         ui::splash::draw_status(&mut display, 2, "Cached weather loaded", Rgb565::GREEN);
         log::info!("Showing cached weather from {}", snapshot.timestamp);
         let cached_current = snapshot.to_current_weather();
@@ -132,11 +131,11 @@ fn main() {
     }
 
     // ── SD card check ───────────────────────────────────────────────
-    let has_sd = hal::sd_available();
+    let has_sd = sd::available();
     if has_sd {
         ui::splash::draw_status(&mut display, 2, "SD card detected", Rgb565::GREEN);
         // Try loading full forecast from SD
-        if let Some(json) = hal::sd_load_forecast() {
+        if let Some(json) = sd::load_forecast() {
             if let Ok(f) = weathertrack_core::cache::deserialize_forecast(&json) {
                 log::info!("Loaded full forecast from SD card");
                 app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
@@ -146,8 +145,8 @@ fn main() {
 
     // ── WiFi ────────────────────────────────────────────────────────
     ui::splash::draw_status(&mut display, 2, "Connecting WiFi...", Rgb565::WHITE);
-    hal::set_led(255, 165, 0, &mut led);
-    let _wifi = hal::init_wifi(p.modem, sys_loop, nvs_part, &cfg.ssid, &cfg.pass);
+    led::set_led(255, 165, 0, &mut led_drv);
+    let _wifi = wifi::connect(p.modem, sys_loop, nvs_part, &cfg.ssid, &cfg.pass).unwrap();
     ui::splash::draw_status(
         &mut display,
         2,
@@ -163,7 +162,7 @@ fn main() {
             cfg.lat = loc.latitude;
             cfg.lon = loc.longitude;
             cfg.location = loc.name.clone();
-            hal::save_config(&mut nvs, &cfg);
+            nvs::save_config(&mut nvs_store, &cfg);
             app::update(
                 &mut model,
                 app::Msg::LocationDetected {
@@ -192,7 +191,7 @@ fn main() {
 
     // ── Initial weather fetch ───────────────────────────────────────
     ui::splash::draw_status(&mut display, 4, "Fetching weather...", Rgb565::WHITE);
-    hal::set_led(0, 0, 255, &mut led);
+    led::set_led(0, 0, 255, &mut led_drv);
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
         Ok(f) => {
@@ -200,17 +199,17 @@ fn main() {
             if let Some(c) = f.current.as_ref() {
                 let snapshot =
                     weathertrack_core::cache::WeatherSnapshot::from_current(c, &cfg.location);
-                hal::cache_save(&mut nvs, &snapshot);
+                nvs::cache_save(&mut nvs_store, &snapshot);
             }
             // Cache to SD if available
             if has_sd {
                 if let Ok(json) = weathertrack_core::cache::serialize_forecast(&f) {
-                    hal::sd_save_forecast(&json);
+                    sd::save_forecast(&json);
                 }
             }
             app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
             ui::splash::draw_status(&mut display, 4, "Weather OK", Rgb565::GREEN);
-            hal::set_led(0, 255, 0, &mut led);
+            led::set_led(0, 255, 0, &mut led_drv);
         }
         Err(e) => {
             app::update(&mut model, app::Msg::WeatherError(e.to_string()));
@@ -220,7 +219,7 @@ fn main() {
                 "Weather FAILED (using cache)",
                 Rgb565::YELLOW,
             );
-            hal::set_led(255, 165, 0, &mut led);
+            led::set_led(255, 165, 0, &mut led_drv);
         }
     }
 
@@ -259,7 +258,7 @@ fn main() {
 
         // Auto-refresh
         if ticks.wrapping_sub(last_fetch) >= REFRESH_MS {
-            hal::set_led(0, 0, 255, &mut led);
+            led::set_led(0, 0, 255, &mut led_drv);
             match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
                 Ok(f) => {
                     // Update cache
@@ -268,19 +267,19 @@ fn main() {
                             c,
                             &model.location,
                         );
-                        hal::cache_save(&mut nvs, &snapshot);
+                        nvs::cache_save(&mut nvs_store, &snapshot);
                     }
                     if has_sd {
                         if let Ok(json) = weathertrack_core::cache::serialize_forecast(&f) {
-                            hal::sd_save_forecast(&json);
+                            sd::save_forecast(&json);
                         }
                     }
                     app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
-                    hal::set_led(0, 255, 0, &mut led);
+                    led::set_led(0, 255, 0, &mut led_drv);
                 }
                 Err(e) => {
                     app::update(&mut model, app::Msg::WeatherError(e.to_string()));
-                    hal::set_led(255, 165, 0, &mut led);
+                    led::set_led(255, 165, 0, &mut led_drv);
                 }
             }
             last_fetch = ticks;
