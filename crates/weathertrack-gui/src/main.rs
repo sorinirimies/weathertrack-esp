@@ -150,7 +150,7 @@ fn main() {
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
         Ok(f) => {
-            app::update(&mut model, app::Msg::WeatherLoaded(f));
+            app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
             hal::set_led(0, 255, 0, &mut led);
         }
         Err(e) => {
@@ -190,7 +190,7 @@ fn main() {
             hal::set_led(0, 0, 255, &mut led);
             match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
                 Ok(f) => {
-                    app::update(&mut model, app::Msg::WeatherLoaded(f));
+                    app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
                     bridge::sync_all(&slint_app, &model);
                     hal::set_led(0, 255, 0, &mut led);
                 }

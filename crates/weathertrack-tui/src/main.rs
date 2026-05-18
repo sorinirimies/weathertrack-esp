@@ -125,7 +125,10 @@ fn main() {
             timezone: "auto".to_string(),
             location: None,
         };
-        app::update(&mut model, app::Msg::WeatherLoaded(cached_forecast));
+        app::update(
+            &mut model,
+            app::Msg::WeatherLoaded(Box::new(cached_forecast)),
+        );
     }
 
     // ── SD card check ───────────────────────────────────────────────
@@ -136,7 +139,7 @@ fn main() {
         if let Some(json) = hal::sd_load_forecast() {
             if let Ok(f) = weathertrack_core::cache::deserialize_forecast(&json) {
                 log::info!("Loaded full forecast from SD card");
-                app::update(&mut model, app::Msg::WeatherLoaded(f));
+                app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
             }
         }
     }
@@ -205,7 +208,7 @@ fn main() {
                     hal::sd_save_forecast(&json);
                 }
             }
-            app::update(&mut model, app::Msg::WeatherLoaded(f));
+            app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
             ui::splash::draw_status(&mut display, 4, "Weather OK", Rgb565::GREEN);
             hal::set_led(0, 255, 0, &mut led);
         }
@@ -272,7 +275,7 @@ fn main() {
                             hal::sd_save_forecast(&json);
                         }
                     }
-                    app::update(&mut model, app::Msg::WeatherLoaded(f));
+                    app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
                     hal::set_led(0, 255, 0, &mut led);
                 }
                 Err(e) => {

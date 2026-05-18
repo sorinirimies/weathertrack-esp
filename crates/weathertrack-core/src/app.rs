@@ -41,7 +41,7 @@ impl Model {
 /// Events that modify application state.
 pub enum Msg {
     NextPage,
-    WeatherLoaded(Forecast),
+    WeatherLoaded(Box<Forecast>),
     WeatherError(String),
     LocationDetected { name: String, lat: f64, lon: f64 },
 }
@@ -64,7 +64,7 @@ pub fn update(model: &mut Model, msg: Msg) {
                 );
             }
             model.error = None;
-            model.forecast = Some(f);
+            model.forecast = Some(*f);
             model.dirty = true;
         }
         Msg::WeatherError(e) => {
