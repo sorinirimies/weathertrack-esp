@@ -1,9 +1,6 @@
 //! Network: HTTP client, weather fetching, IP geolocation.
 
-use esp_idf_svc::{
-    http::client::{Configuration as HttpConfig, EspHttpConnection, Method},
-    io::Read,
-};
+use esp_idf_svc::http::client::{Configuration as HttpConfig, EspHttpConnection, Method};
 use weathertrack_core::{
     build_forecast_url, parse_forecast, parse_ip_location, Forecast, Location, IPAPI_URL,
 };

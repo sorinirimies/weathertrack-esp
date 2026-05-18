@@ -1,6 +1,6 @@
 //! Pages 2+: Daily forecast — one day per page.
 
-use super::style::{bold, dim, plain, weather_icon, wind_dir};
+use super::style::{bold, dim, plain, weather_icon};
 use ratatui::{
     layout::{Constraint, Layout},
     text::{Line, Span},

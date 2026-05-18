@@ -3,6 +3,7 @@
 //! Hardware init, Slint platform, then Elm event loop.
 
 mod bridge;
+#[allow(dead_code)]
 mod hal;
 mod net;
 mod platform;

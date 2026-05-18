@@ -1,0 +1,34 @@
+// Page 2: 7-day forecast list.
+
+import { VerticalBox } from "std-widgets.slint";
+import { ForecastDay } from "../types.slint";
+import { ForecastRow } from "../components/forecast_row.slint";
+
+export component ForecastPage inherits Rectangle {
+    in property <[ForecastDay]> days;
+
+    background: #000000;
+
+    Text {
+        x: 0px;
+        y: 6px;
+        width: 100%;
+        text: "Forecast";
+        color: #00d4ff;
+        font-size: 14px;
+        font-weight: 700;
+        horizontal-alignment: center;
+    }
+
+    VerticalBox {
+        y: 28px;
+        x: 0px;
+        width: 100%;
+        height: 140px;
+        spacing: 0px;
+        padding: 0px;
+        for day in days: ForecastRow {
+            day: day;
+        }
+    }
+}
