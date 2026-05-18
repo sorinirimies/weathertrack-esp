@@ -12,13 +12,13 @@ def main [] {
             print "  ✅ PASSED"
             true
         } else {
-            print "  ❌ FAILED"
+            print $"  ❌ FAILED: ($result.stderr)"
             false
         }
     })
 
-    let passed = ($results | filter {|r| $r } | length)
-    let failed = ($results | filter {|r| not $r } | length)
+    let passed = ($results | where {|r| $r == true } | length)
+    let failed = ($results | where {|r| $r == false } | length)
 
     print $"\nResults: ($passed)/($total) passed, ($failed) failed"
     if $failed > 0 { exit 1 }

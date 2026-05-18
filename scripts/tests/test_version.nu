@@ -1,25 +1,37 @@
 #!/usr/bin/env nu
-# Tests for version.nu
-use runner.nu [run-tests, assert]
+# Tests for version.nu — validates workspace version consistency.
 
-def "test version: has three semver parts" [] {
+def main [] {
+    print "(ansi cyan_bold)Running version tests...(ansi reset)"
+
+    # Test 1: version has three semver parts
     let version = (open Cargo.toml | get workspace.package.version)
     let parts = ($version | split row ".")
-    assert equal ($parts | length) 3
-}
-
-def "test version: parts are numeric" [] {
-    let version = (open Cargo.toml | get workspace.package.version)
-    let parts = ($version | split row ".")
-    for part in $parts {
-        assert ($part | into int | describe | str starts-with "int")
+    if ($parts | length) != 3 {
+        print $"  ❌ version should have 3 parts, got ($parts | length)"
+        exit 1
     }
-}
+    print $"  ✅ version has 3 parts: ($version)"
 
-def "test version: matches workspace dep" [] {
-    let ws_version = (open Cargo.toml | get workspace.package.version)
+    # Test 2: all parts are numeric
+    for part in $parts {
+        let num = ($part | into int)
+        if ($num | describe) != "int" {
+            print $"  ❌ version part '($part)' is not numeric"
+            exit 1
+        }
+    }
+    print "  ✅ all parts are numeric"
+
+    # Test 3: workspace dep version matches package version
     let dep_version = (open Cargo.toml | get workspace.dependencies.weathertrack-core.version)
-    assert equal $ws_version $dep_version
+    if $version != $dep_version {
+        print $"  ❌ workspace version ($version) != dep version ($dep_version)"
+        exit 1
+    }
+    print $"  ✅ workspace dep version matches: ($dep_version)"
+
+    print "(ansi green_bold)All version tests passed!(ansi reset)"
 }
 
-def main [] { run-tests }
+main
