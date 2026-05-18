@@ -11,42 +11,29 @@ default:
 
 _check-git-cliff:
     @command -v git-cliff >/dev/null 2>&1 || { \
-        echo "git-cliff not found. Install with: just install-git-cliff"; exit 1; \
+        echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; \
     }
 
+# Check nu (nushell) is available
 _check-nu:
     @command -v nu >/dev/null 2>&1 || { \
-        echo "nu (nushell) not found. Install with: just install-nu"; exit 1; \
+        echo "❌ nu (nushell) not found. Install: https://www.nushell.sh"; exit 1; \
     }
 
 _check-cargo-outdated:
     @command -v cargo-outdated >/dev/null 2>&1 || { \
-        echo "cargo-outdated not found. Install with: just install-cargo-outdated"; exit 1; \
+        echo "❌ cargo-outdated not found. Install with: cargo install cargo-outdated"; exit 1; \
     }
-
-# ── Install tools ────────────────────────────────────────────────────────────
-
-# Install git-cliff (changelog generator)
-install-git-cliff:
-    cargo install git-cliff --locked
-
-# Install nu (nushell scripting)
-install-nu:
-    cargo install nu --locked
-
-# Install cargo-outdated (dependency checker)
-install-cargo-outdated:
-    cargo install cargo-outdated --locked
 
 # Install all recommended development tools
 install-tools:
-    @echo "Installing development tools..."
-    @command -v git-cliff >/dev/null 2>&1 || just install-git-cliff
-    @command -v nu >/dev/null 2>&1 || just install-nu
-    @command -v cargo-outdated >/dev/null 2>&1 || just install-cargo-outdated
-    @echo "All tools installed!"
+    @echo "Installing development tools…"
+    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff --locked
+    @command -v nu >/dev/null 2>&1 || cargo install nu --locked
+    @command -v cargo-outdated >/dev/null 2>&1 || cargo install cargo-outdated --locked
+    @echo "✅ All tools installed!"
 
-# ── Build ─────────────────────────────────────────────────────────────────────────────
+# ── Build ─────────────────────────────────────────────────────────────────────
 
 # Generate sdkconfig.defaults with absolute partition table paths (machine-specific)
 gen-sdkconfig:
@@ -124,7 +111,7 @@ test-nu: _check-nu
 
 # Run both Rust and Nu tests
 test-all: test test-nu
-    @echo "All Rust and Nu tests passed!"
+    @echo "✅ All Rust and Nu tests passed!"
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 
@@ -148,145 +135,188 @@ clippy:
 doc:
     cargo doc -p weathertrack-core --no-deps --open
 
-# Run all quality checks (format, clippy, test, nu)
-check-all: fmt clippy test test-nu
-    @echo "Verifying formatting is clean..."
-    cargo fmt --all -- --check
-    @echo "All checks passed!"
+# Run all quality checks (format, clippy, test, nu) — must pass before a release.
 
-# Full release quality gate: all checks + release builds
+# Auto-formats first, then verifies no changes remain (catches unstaged format diffs).
+check-all: fmt clippy test test-nu
+    @echo "🔍 Verifying formatting is clean…"
+    cargo fmt --all -- --check
+    @echo "✅ All checks passed!"
+
+# Full pre-release quality gate — everything in check-all plus release builds.
 check-release: check-all build-tui-release build-gui-release
-    @echo "Release quality gate passed!"
+    @echo "✅ Release quality gate passed (fmt + clippy + test + nu + release builds)!"
 
 # ── Changelog ─────────────────────────────────────────────────────────────────
 
-# Generate changelog
+# Regenerate the full CHANGELOG.md from all tags
 changelog: _check-git-cliff
-    git-cliff -o CHANGELOG.md
+    @echo "Generating full changelog…"
+    git-cliff --output CHANGELOG.md
+    @echo "✅ CHANGELOG.md updated."
 
-# Write only unreleased changes to CHANGELOG.md
+# Prepend only unreleased commits to CHANGELOG.md
 changelog-unreleased: _check-git-cliff
-    git-cliff --unreleased -o CHANGELOG.md
+    git-cliff --unreleased --prepend CHANGELOG.md
+    @echo "✅ Unreleased changes prepended."
 
-# Preview unreleased changes without writing
+# Preview changelog for the next release without writing the file
 changelog-preview: _check-git-cliff
-    git-cliff --unreleased
+    @git-cliff --unreleased
 
-# ── Version ───────────────────────────────────────────────────────────────────
+# ── Version bump ──────────────────────────────────────────────────────────────
 
-# Print current workspace version
+# Show the current workspace version
 version: _check-nu
     @nu scripts/version.nu
 
-# Validate a version tag against CI rules
+# Validate that a version string will produce a valid vX.Y.Z tag.
 validate-tag version: _check-nu
-    nu scripts/ci/validate_tag.nu v{{ version }}
+    @nu scripts/ci/validate_tag.nu "v{{ version }}" 2>&1 >/dev/null
 
-# Check that the version is actually changing
+# Fail fast if the requested version is the same as the current one.
 _check-version-changed version: _check-nu
     #!/usr/bin/env sh
     current=$(nu scripts/version.nu)
     if [ "$current" = "{{ version }}" ]; then
-        echo "Version {{ version }} is already current. Nothing to bump."
+        echo "❌ Version {{ version }} is already the current version. Nothing to bump."
         exit 1
     fi
-    echo "Version will change: $current -> {{ version }}"
+    echo "✅ Version will change: $current → {{ version }}"
 
-# Bump version across all manifests (cheap validation first, expensive quality gate second)
+# Bump the workspace version, regenerate Cargo.lock + CHANGELOG.md, commit and tag.
+
+# Validation runs first (cheap), quality gate runs second (expensive).
 bump version: (validate-tag version) (_check-version-changed version) check-release _check-git-cliff
     nu scripts/bump_version.nu {{ version }}
 
-# ── Dependencies ──────────────────────────────────────────────────────────────
+# ── Housekeeping ──────────────────────────────────────────────────────────────
 
-# Upgrade all dependencies
-upgrade-deps: _check-nu
-    nu scripts/upgrade_deps.nu
-
-# Update the lockfile only
+# Update all dependencies (Cargo.lock only)
 update:
     cargo update
 
-# Update dependencies, run quality gate, commit and push
-update-deps: _check-nu
-    @echo "Updating dependencies..."
+# Update dependencies, run the full quality gate, then commit and push if all green.
+update-deps:
+    @echo "⬆️  Updating dependencies…"
     cargo update
-    @echo "Running quality gate..."
-    just check-all
-    @echo "Committing..."
+    @echo "🔍 Running quality gate…"
+    cargo fmt --all -- --check
+    cargo clippy -p weathertrack-core --all-targets --all-features -- -D warnings -A deprecated
+    cargo test -p weathertrack-core --all-features --all-targets
+    @echo "✅ All checks passed — committing dependency updates…"
     git add Cargo.lock
     git diff --cached --quiet || git commit -m "chore: update dependencies"
     just push-all
+    @echo "✅ Dependency updates pushed to all remotes."
 
-# Show outdated dependencies
+# Upgrade all dependencies (nu script)
+upgrade-deps: _check-nu
+    nu scripts/upgrade_deps.nu
+
+# Show outdated dependencies (requires cargo-outdated)
 outdated: _check-cargo-outdated
     cargo outdated
 
-# ── Git remotes ───────────────────────────────────────────────────────────────
+# Show all configured remotes
+remotes:
+    @git remote -v
 
-# Push to all remotes (continues on failure)
+# ── Git remotes & pushing ─────────────────────────────────────────────────────
+
+# Push the current branch to origin (Gitea 192.168.1.204)
+push:
+    git push origin main
+
+# Push the current branch to GitHub
+push-github:
+    git push github main
+
+# Push the current branch to Starscream (Gitea 192.168.1.44)
+push-starscream:
+    git push starscream main
+
+# Push the current branch to all remotes (continues on failure)
 push-all:
     #!/usr/bin/env sh
     failed=""
-    git push origin main     || failed="$failed origin"
-    git push starscream main || failed="$failed starscream"
-    git push github main     || failed="$failed github"
+    git push origin main      || failed="$failed origin"
+    git push starscream main  || failed="$failed starscream"
+    git push github main      || failed="$failed github"
     if [ -n "$failed" ]; then
-        echo "Failed to push to:$failed"
-        exit 1
+        echo "⚠️  Failed to push to:$failed"
     else
-        echo "Pushed to all remotes"
+        echo "✅ Pushed to origin, Starscream, and GitHub!"
     fi
 
-# Force-push to all remotes (continues on failure)
+# Force-push the current branch to all remotes
 push-all-force:
     #!/usr/bin/env sh
     failed=""
-    git push origin main --force-with-lease     || failed="$failed origin"
-    git push starscream main --force-with-lease  || failed="$failed starscream"
-    git push github main --force-with-lease      || failed="$failed github"
+    git push --force-with-lease origin main      || failed="$failed origin"
+    git push --force-with-lease starscream main   || failed="$failed starscream"
+    git push --force-with-lease github main       || failed="$failed github"
     if [ -n "$failed" ]; then
-        echo "Failed to force-push to:$failed"
-        exit 1
+        echo "⚠️  Failed to force-push to:$failed"
     else
-        echo "Force-pushed to all remotes"
+        echo "✅ Force-pushed to origin, Starscream, and GitHub!"
     fi
 
-# Pull from origin
+# Pull the current branch from origin
 pull:
     git pull origin main
 
-# Pull from all remotes
+# Pull the current branch from all remotes (continues on failure)
 pull-all:
-    git pull origin main
+    #!/usr/bin/env sh
+    failed=""
+    git pull origin main      || failed="$failed origin"
+    git pull starscream main  || failed="$failed starscream"
+    git pull github main      || failed="$failed github"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Failed to pull from:$failed"
+    else
+        echo "✅ Pulled from origin, Starscream, and GitHub!"
+    fi
 
-# Push tags to origin
+# Push all tags to origin
 push-tags:
     git push origin --tags
 
-# Push tags to all remotes (continues on failure)
+# Push all tags to all remotes (continues on failure)
 push-tags-all:
     #!/usr/bin/env sh
     failed=""
-    git push origin --tags     || failed="$failed origin"
-    git push starscream --tags || failed="$failed starscream"
-    git push github --tags     || failed="$failed github"
+    git push origin --tags      || failed="$failed origin"
+    git push starscream --tags  || failed="$failed starscream"
+    git push github --tags      || failed="$failed github"
     if [ -n "$failed" ]; then
-        echo "Failed to push tags to:$failed"
-        exit 1
+        echo "⚠️  Failed to push tags to:$failed"
     else
-        echo "Pushed tags to all remotes"
+        echo "✅ Tags pushed to all remotes!"
     fi
 
-# List all remotes
-remotes:
-    git remote -v
+# ── Release workflows ─────────────────────────────────────────────────────────
 
-# ── Release ───────────────────────────────────────────────────────────────────
-
-# Tag, bump, and push a release
+# Bump, commit, tag, then push to origin — primary release target.
 release version: (bump version)
-    just push-all
-    just push-tags-all
+    @echo "Pushing release v{{ version }} to origin…"
+    git push --follow-tags origin main
+    @echo "✅ Release v{{ version }} pushed to origin."
+
+# Bump, commit, tag, then push to all remotes (continues on failure).
+release-all version: (bump version)
+    #!/usr/bin/env sh
+    echo "Pushing release v{{ version }} to all remotes…"
+    failed=""
+    git push --follow-tags origin main      || failed="$failed origin"
+    git push --follow-tags starscream main  || failed="$failed starscream"
+    git push --follow-tags github main      || failed="$failed github"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Release v{{ version }} failed to push to:$failed"
+    else
+        echo "✅ Release v{{ version }} pushed to origin, Starscream, and GitHub!"
+    fi
 
 # Preview what a release would look like
 release-preview: _check-git-cliff
@@ -294,3 +324,33 @@ release-preview: _check-git-cliff
     @echo ""
     @echo "Unreleased commits:"
     @git-cliff --unreleased
+    @echo ""
+    @echo "Workspace version:"
+    @grep -A5 '^\[workspace\.package\]' Cargo.toml | grep '^version'
+
+# Push the latest commit and all tags to every remote (no bump, continues on failure).
+push-release-all: check-all
+    #!/usr/bin/env sh
+    failed=""
+    git push --follow-tags origin main      || failed="$failed origin"
+    git push --follow-tags starscream main  || failed="$failed starscream"
+    git push --follow-tags github main      || failed="$failed github"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Failed to push to:$failed"
+    else
+        echo "✅ Latest commit + tags pushed to all remotes."
+    fi
+
+# Force-sync all remotes with origin (continues on failure)
+sync-all:
+    #!/usr/bin/env sh
+    failed=""
+    git push starscream main --force       || failed="$failed starscream"
+    git push starscream --tags --force     || failed="$failed starscream-tags"
+    git push github main --force           || failed="$failed github"
+    git push github --tags --force         || failed="$failed github-tags"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Failed to sync:$failed"
+    else
+        echo "✅ All remotes force-synced with origin."
+    fi

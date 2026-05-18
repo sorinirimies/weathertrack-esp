@@ -7,17 +7,18 @@ def main [] {
 
     let results = ($test_files | each {|file|
         print $"Running ($file)..."
-        let ok = (do { nu $file } | complete | get exit_code) == 0
-        if $ok {
-            print $"  PASSED"
+        let result = (do { nu $file } | complete)
+        if $result.exit_code == 0 {
+            print "  ✅ PASSED"
+            true
         } else {
-            print $"  FAILED"
+            print "  ❌ FAILED"
+            false
         }
-        $ok
     })
 
-    let passed = ($results | where $it == true | length)
-    let failed = ($results | where $it == false | length)
+    let passed = ($results | filter {|r| $r } | length)
+    let failed = ($results | filter {|r| not $r } | length)
 
     print $"\nResults: ($passed)/($total) passed, ($failed) failed"
     if $failed > 0 { exit 1 }
