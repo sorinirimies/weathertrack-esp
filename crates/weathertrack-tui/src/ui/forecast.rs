@@ -1,8 +1,9 @@
-//! Pages 2+: Daily forecast — one day per page.
+//! Pages 1+: Daily forecast — one day per page.
 
 use super::style::{bold, dim, plain, weather_icon};
 use ratatui::{
     layout::{Constraint, Layout},
+    style::Color,
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
@@ -28,8 +29,6 @@ pub fn draw(f: &mut Frame, d: &DailyForecast, pg: usize, total: usize) {
         &d.date
     };
 
-    use ratatui::style::Color;
-
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(format!(" {}", date), bold(Color::Cyan)),
@@ -44,14 +43,14 @@ pub fn draw(f: &mut Frame, d: &DailyForecast, pg: usize, total: usize) {
                 format!(" {:.0}/{:.0}C", d.temp_max, d.temp_min),
                 bold(Color::Yellow),
             ),
-            Span::styled(" ", dim()),
+            Span::styled("  ", dim()),
             Span::styled(
-                format!("[{}]", weather_icon(&d.condition)),
+                format!(
+                    "[{}] {}",
+                    weather_icon(&d.condition),
+                    d.condition.short_label()
+                ),
                 bold(Color::White),
-            ),
-            Span::styled(
-                format!(" {}", d.condition.icon_label()),
-                plain(Color::White),
             ),
         ])),
         rows[3],
@@ -64,22 +63,11 @@ pub fn draw(f: &mut Frame, d: &DailyForecast, pg: usize, total: usize) {
                 plain(Color::Blue),
             ),
             Span::styled("  ", dim()),
-            Span::styled(format!("W{:.0} km/h", d.wind_speed), plain(Color::Green)),
+            Span::styled(format!("W{:.0}", d.wind_speed), plain(Color::Green)),
+            Span::styled("  ", dim()),
+            Span::styled(format!("UV{:.0}", d.uv_index), plain(Color::Yellow)),
         ])),
         rows[5],
-    );
-
-    let sr = d.sunrise.split('T').nth(1).unwrap_or("--:--");
-    let ss = d.sunset.split('T').nth(1).unwrap_or("--:--");
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(format!(" UV {:.0}", d.uv_index), plain(Color::Yellow)),
-            Span::styled("  ", dim()),
-            Span::styled(format!("Up{}", sr), dim()),
-            Span::styled(" ", dim()),
-            Span::styled(format!("Dn{}", ss), dim()),
-        ])),
-        rows[6],
     );
 
     f.render_widget(
