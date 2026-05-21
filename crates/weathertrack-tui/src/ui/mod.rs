@@ -1,6 +1,5 @@
 //! UI module: view dispatcher and screen components.
 
-pub mod details;
 pub mod forecast;
 pub mod hero;
 pub mod splash;
@@ -20,16 +19,9 @@ pub fn view(f: &mut Frame, model: &Model) {
                 }
             }
         }
-        1 => {
-            if let Some(ref forecast) = model.forecast {
-                if let Some(ref current) = forecast.current {
-                    details::draw(f, current, model.page, total);
-                }
-            }
-        }
         p => {
             if let Some(ref forecast) = model.forecast {
-                if let Some(day) = forecast.daily.get(p - 2) {
+                if let Some(day) = forecast.daily.get(p - 1) {
                     forecast::draw(f, day, model.page, total);
                 }
             }

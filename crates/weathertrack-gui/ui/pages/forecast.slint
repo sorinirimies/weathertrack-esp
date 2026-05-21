@@ -1,34 +1,86 @@
-// Page 2: 7-day forecast list.
+// Forecast day page — one day per page with big readable text.
 
-import { VerticalBox } from "std-widgets.slint";
+import { HorizontalBox } from "std-widgets.slint";
 import { ForecastDay } from "../types.slint";
-import { ForecastRow } from "../components/forecast_row.slint";
 
-export component ForecastPage inherits Rectangle {
-    in property <[ForecastDay]> days;
+export component ForecastDayPage inherits Rectangle {
+    in property <ForecastDay> day;
 
     background: #000000;
 
+    // Date header
     Text {
         x: 0px;
         y: 6px;
         width: 100%;
-        text: "Forecast";
+        text: day.date;
         color: #00d4ff;
         font-size: 14px;
         font-weight: 700;
         horizontal-alignment: center;
     }
 
-    VerticalBox {
-        y: 28px;
+    // Big temperature range
+    Text {
+        x: 0px;
+        y: 30px;
+        width: 100%;
+        text: day.temp-max + "° / " + day.temp-min + "°";
+        color: #ffffff;
+        font-size: 28px;
+        font-weight: 700;
+        horizontal-alignment: center;
+    }
+
+    // Condition icon + label
+    HorizontalBox {
+        y: 72px;
         x: 0px;
         width: 100%;
-        height: 140px;
-        spacing: 0px;
-        padding: 0px;
-        for day in days: ForecastRow {
-            day: day;
+        height: 24px;
+        alignment: center;
+        spacing: 6px;
+        Text {
+            text: day.condition-icon;
+            font-size: 18px;
+            color: #ffcc00;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: day.condition;
+            font-size: 16px;
+            color: #ffcc00;
+            vertical-alignment: center;
+        }
+    }
+
+    // Details: rain | wind | UV
+    HorizontalBox {
+        y: 108px;
+        x: 20px;
+        width: 280px;
+        height: 20px;
+        alignment: space-between;
+        Text {
+            text: "Rain " + day.rain-pct;
+            color: #4488ff;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: "Wind " + day.wind;
+            color: #00ff88;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: "UV " + day.uv;
+            color: #ffcc00;
+            font-size: 14px;
+            vertical-alignment: center;
         }
     }
 }

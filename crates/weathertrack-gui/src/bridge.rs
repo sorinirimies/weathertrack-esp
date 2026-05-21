@@ -77,4 +77,27 @@ pub fn sync_all(app: &WeatherApp, model: &weathertrack_core::app::Model) {
     app.set_current_page(model.page as i32);
     let total = model.total_pages();
     app.set_page_info(format!("{}/{}", model.page + 1, total).into());
+
+    // Set the current forecast day for pages > 0
+    if model.page > 0 {
+        if let Some(ref f) = model.forecast {
+            if let Some(d) = f.daily.get(model.page - 1) {
+                let date = if d.date.len() >= 10 {
+                    &d.date[5..10]
+                } else {
+                    &d.date
+                };
+                app.set_current_day(ForecastDay {
+                    date: date.into(),
+                    condition_icon: d.condition.icon().into(),
+                    condition: d.condition.short_label().into(),
+                    temp_max: format!("{:.0}", d.temp_max).into(),
+                    temp_min: format!("{:.0}", d.temp_min).into(),
+                    rain_pct: format!("{:.0}%", d.precipitation_probability * 100.0).into(),
+                    wind: format!("{:.0}", d.wind_speed).into(),
+                    uv: format!("{:.0}", d.uv_index).into(),
+                });
+            }
+        }
+    }
 }

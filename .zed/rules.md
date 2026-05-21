@@ -42,10 +42,8 @@ ui/
 ├── weather.slint              — entry point (imports only)
 ├── types.slint                — WeatherData, ForecastDay, AlertData
 ├── components/spinner.slint   — LoadingSpinner
-├── components/forecast_row.slint
-├── pages/hero.slint           — CurrentHeroPage
-├── pages/details.slint        — DetailsPage
-└── pages/forecast.slint       — ForecastPage
+├── pages/hero.slint           — CurrentPage (merged hero + details)
+└── pages/forecast.slint       — ForecastDayPage (one day per page)
 ```
 
 ## Rules

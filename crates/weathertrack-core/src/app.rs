@@ -32,7 +32,7 @@ impl Model {
 
     pub fn total_pages(&self) -> usize {
         match &self.forecast {
-            Some(f) => 2 + f.daily.len(),
+            Some(f) => 1 + f.daily.len(), // current + one per day
             None => 1,
         }
     }
@@ -162,23 +162,21 @@ mod tests {
     fn test_total_pages_with_forecast() {
         let mut m = Model::new("X", 0.0, 0.0);
         update(&mut m, Msg::WeatherLoaded(Box::new(make_forecast(7))));
-        assert_eq!(m.total_pages(), 9); // 2 + 7
+        assert_eq!(m.total_pages(), 8); // 1 + 7
     }
 
     #[test]
     fn test_next_page_wraps() {
         let mut m = Model::new("X", 0.0, 0.0);
         update(&mut m, Msg::WeatherLoaded(Box::new(make_forecast(2))));
-        // total_pages = 4 (hero + details + 2 forecast)
-        assert_eq!(m.total_pages(), 4);
+        // total_pages = 3 (current + 2 forecast)
+        assert_eq!(m.total_pages(), 3);
         m.dirty = false;
 
         update(&mut m, Msg::NextPage);
         assert_eq!(m.page, 1);
         update(&mut m, Msg::NextPage);
         assert_eq!(m.page, 2);
-        update(&mut m, Msg::NextPage);
-        assert_eq!(m.page, 3);
         update(&mut m, Msg::NextPage);
         assert_eq!(m.page, 0); // wraps
         assert!(m.dirty);
