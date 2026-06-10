@@ -200,7 +200,7 @@ fn main() {
             last_fetch = ticks;
         }
 
-        FreeRtos::delay_ms(33);
-        ticks = ticks.wrapping_add(33);
+        FreeRtos::delay_ms(50);
+        ticks = ticks.wrapping_add(50);
     }
 }
