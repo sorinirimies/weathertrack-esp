@@ -302,17 +302,17 @@ impl WeatherCondition {
     /// that work with mousefood's embedded-graphics-unicodefonts.
     pub fn icon(&self) -> &'static str {
         match self {
-            Self::Clear => "\u{263C}",            // ☼ (white sun with rays)
+            Self::Clear => "\u{2600}",            // ☀ (black sun with rays)
             Self::Clouds => "\u{2601}",           // ☁ (cloud)
-            Self::Rain => "\u{2602}",             // ☂ (umbrella)
-            Self::Drizzle => "\u{2602}",          // ☂
-            Self::Thunderstorm => "\u{2607}",     // ☇ (lightning)
+            Self::Rain => "\u{2614}",             // ☔ (umbrella with rain drops)
+            Self::Drizzle => "\u{2614}",          // ☔
+            Self::Thunderstorm => "\u{26A1}",     // ⚡ (high voltage)
             Self::Snow => "\u{2744}",             // ❄ (snowflake)
-            Self::Mist | Self::Fog => "\u{2248}", // ≈ (wavy lines)
+            Self::Mist | Self::Fog => "\u{2601}", // ☁ (cloud)
             Self::Smoke | Self::Dust | Self::Sand | Self::Squall => "~",
-            Self::Haze => "\u{2248}",    // ≈
-            Self::Ash => "\u{2206}",     // ∆ (triangle/volcano)
-            Self::Tornado => "\u{21BB}", // ↻ (clockwise rotation)
+            Self::Haze => "\u{2601}",    // ☁
+            Self::Ash => "\u{25B2}",     // ▲ (triangle)
+            Self::Tornado => "\u{27F3}", // ⟳ (rotation)
             Self::Unknown => "?",
         }
     }
@@ -320,6 +320,24 @@ impl WeatherCondition {
     /// Compact label with icon for small screens: "icon label"
     pub fn icon_label(&self) -> String {
         format!("{} {}", self.icon(), self.short_label())
+    }
+
+    /// GUI-friendly icon text (ASCII, guaranteed to render in any font).
+    pub fn gui_icon(&self) -> &'static str {
+        match self {
+            Self::Clear => "*",
+            Self::Clouds => "**",
+            Self::Rain => "///",
+            Self::Drizzle => "//",
+            Self::Thunderstorm => "/!\\",
+            Self::Snow => "***",
+            Self::Mist | Self::Fog => "---",
+            Self::Smoke | Self::Dust | Self::Sand | Self::Squall => "~~~",
+            Self::Haze => "...",
+            Self::Ash => "^^^",
+            Self::Tornado => "@",
+            Self::Unknown => "?",
+        }
     }
 }
 

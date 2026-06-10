@@ -11,7 +11,7 @@ pub fn sync_current(app: &WeatherApp, w: &CurrentWeather, location: &str) {
         temperature: format!("{:.1}", w.temperature).into(),
         feels_like: format!("{:.1}", w.feels_like).into(),
         condition: w.condition.short_label().into(),
-        condition_icon: w.condition.icon().into(),
+        condition_icon: w.condition.gui_icon().into(),
         humidity: format!("{:.0}", w.humidity).into(),
         pressure: format!("{:.0}", w.pressure).into(),
         wind_speed: format!(
@@ -40,7 +40,7 @@ pub fn sync_forecast(app: &WeatherApp, forecast: &Forecast) {
             };
             ForecastDay {
                 date: date.into(),
-                condition_icon: d.condition.icon().into(),
+                condition_icon: d.condition.gui_icon().into(),
                 condition: d.condition.short_label().into(),
                 temp_max: format!("{:.0}", d.temp_max).into(),
                 temp_min: format!("{:.0}", d.temp_min).into(),
@@ -89,7 +89,7 @@ pub fn sync_all(app: &WeatherApp, model: &weathertrack_core::app::Model) {
                 };
                 app.set_current_day(ForecastDay {
                     date: date.into(),
-                    condition_icon: d.condition.icon().into(),
+                    condition_icon: d.condition.gui_icon().into(),
                     condition: d.condition.short_label().into(),
                     temp_max: format!("{:.0}", d.temp_max).into(),
                     temp_min: format!("{:.0}", d.temp_min).into(),
