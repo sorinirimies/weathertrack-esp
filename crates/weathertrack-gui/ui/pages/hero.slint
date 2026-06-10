@@ -1,72 +1,70 @@
 // Page 0: Current weather.
 
-import { HorizontalBox } from "std-widgets.slint";
+import { HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { WeatherData } from "../types.slint";
 
 export component CurrentPage inherits Rectangle {
     in property <WeatherData> weather;
     background: #000000;
 
-    // Row 1: Location
-    Text {
-        y: 4px;
-        width: 100%;
-        text: weather.location;
-        color: #00d4ff;
-        font-size: 16px;
-        font-weight: 700;
-        horizontal-alignment: center;
-    }
+    VerticalBox {
+        alignment: space-around;
+        padding: 4px;
 
-    // Row 2: Temperature + condition
-    HorizontalBox {
-        y: 28px;
-        width: 100%;
-        height: 40px;
-        alignment: center;
-        spacing: 12px;
+        // Row 1: Location
         Text {
-            text: weather.temperature + "°";
-            color: #ffffff;
-            font-size: 36px;
-            font-weight: 700;
-            vertical-alignment: center;
-        }
-
-        Text {
-            text: weather.condition-icon + " " + weather.condition;
-            color: #ffcc00;
-            font-size: 18px;
-            vertical-alignment: center;
-        }
-    }
-
-    // Row 3: Key details
-    HorizontalBox {
-        y: 76px;
-        width: 100%;
-        height: 28px;
-        alignment: center;
-        spacing: 20px;
-        Text {
-            text: "Feel " + weather.feels-like + "°";
-            color: #ff6644;
-            font-size: 16px;
-            vertical-alignment: center;
-        }
-
-        Text {
-            text: weather.humidity + "%";
+            width: 100%;
+            text: weather.location;
             color: #00d4ff;
             font-size: 16px;
-            vertical-alignment: center;
+            font-weight: 700;
+            horizontal-alignment: center;
         }
 
-        Text {
-            text: weather.wind-speed;
-            color: #00ff88;
-            font-size: 16px;
-            vertical-alignment: center;
+        // Row 2: Temperature + condition
+        HorizontalBox {
+            alignment: center;
+            spacing: 12px;
+            Text {
+                text: weather.temperature + "°";
+                color: #ffffff;
+                font-size: 36px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: weather.condition-icon + " " + weather.condition;
+                color: #ffcc00;
+                font-size: 18px;
+                vertical-alignment: center;
+            }
+        }
+
+        // Row 3: Key details
+        HorizontalBox {
+            alignment: center;
+            spacing: 20px;
+            Text {
+                text: "Feel " + weather.feels-like + "°";
+                color: #ff6644;
+                font-size: 16px;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: weather.humidity + "%";
+                color: #00d4ff;
+                font-size: 16px;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: weather.wind-speed;
+                color: #00ff88;
+                font-size: 16px;
+                vertical-alignment: center;
+            }
         }
     }
 }

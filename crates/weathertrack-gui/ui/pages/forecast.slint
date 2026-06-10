@@ -1,72 +1,70 @@
 // Forecast day page — one day, 3 rows.
 
-import { HorizontalBox } from "std-widgets.slint";
+import { HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { ForecastDay } from "../types.slint";
 
 export component ForecastDayPage inherits Rectangle {
     in property <ForecastDay> day;
     background: #000000;
 
-    // Row 1: Date
-    Text {
-        y: 4px;
-        width: 100%;
-        text: day.date;
-        color: #00d4ff;
-        font-size: 16px;
-        font-weight: 700;
-        horizontal-alignment: center;
-    }
+    VerticalBox {
+        alignment: space-around;
+        padding: 4px;
 
-    // Row 2: Temp range + condition
-    HorizontalBox {
-        y: 28px;
-        width: 100%;
-        height: 40px;
-        alignment: center;
-        spacing: 12px;
+        // Row 1: Date
         Text {
-            text: day.temp-max + "°/" + day.temp-min + "°";
-            color: #ffffff;
-            font-size: 32px;
+            width: 100%;
+            text: day.date;
+            color: #00d4ff;
+            font-size: 16px;
             font-weight: 700;
-            vertical-alignment: center;
+            horizontal-alignment: center;
         }
 
-        Text {
-            text: day.condition-icon + " " + day.condition;
-            color: #ffcc00;
-            font-size: 18px;
-            vertical-alignment: center;
-        }
-    }
+        // Row 2: Temp range + condition
+        HorizontalBox {
+            alignment: center;
+            spacing: 12px;
+            Text {
+                text: day.temp-max + "°/" + day.temp-min + "°";
+                color: #ffffff;
+                font-size: 32px;
+                font-weight: 700;
+                vertical-alignment: center;
+            }
 
-    // Row 3: Details
-    HorizontalBox {
-        y: 76px;
-        width: 100%;
-        height: 28px;
-        alignment: center;
-        spacing: 20px;
-        Text {
-            text: "Rain " + day.rain-pct;
-            color: #4488ff;
-            font-size: 16px;
-            vertical-alignment: center;
+            Text {
+                text: day.condition-icon + " " + day.condition;
+                color: #ffcc00;
+                font-size: 18px;
+                vertical-alignment: center;
+            }
         }
 
-        Text {
-            text: "W" + day.wind;
-            color: #00ff88;
-            font-size: 16px;
-            vertical-alignment: center;
-        }
+        // Row 3: Details
+        HorizontalBox {
+            alignment: center;
+            spacing: 20px;
+            Text {
+                text: "Rain " + day.rain-pct;
+                color: #4488ff;
+                font-size: 16px;
+                vertical-alignment: center;
+            }
 
-        Text {
-            text: "UV " + day.uv;
-            color: #ffcc00;
-            font-size: 16px;
-            vertical-alignment: center;
+            Text {
+                text: "W" + day.wind;
+                color: #00ff88;
+                font-size: 16px;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: "UV " + day.uv;
+                color: #ffcc00;
+                font-size: 16px;
+                vertical-alignment: center;
+            }
         }
     }
 }
