@@ -43,9 +43,11 @@ fn main() {
         println!("cargo:warning=sdkconfig.defaults not found! Run `just gen-sdkconfig` first.");
     }
 
-    // ── Slint compilation ───────────────────────────────────────────
+    // ── Slint compilation ───────────────────────────────────────
+    let font_path = Path::new(&manifest_dir).join("ui/fonts");
     let slint_config = slint_build::CompilerConfiguration::new()
-        .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer);
+        .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer)
+        .with_include_paths(vec![font_path]);
     slint_build::compile_with_config("ui/weather.slint", slint_config).unwrap();
 
     embuild::espidf::sysenv::output();

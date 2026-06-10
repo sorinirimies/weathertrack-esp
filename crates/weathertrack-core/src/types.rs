@@ -322,20 +322,21 @@ impl WeatherCondition {
         format!("{} {}", self.icon(), self.short_label())
     }
 
-    /// GUI-friendly icon text (ASCII, guaranteed to render in any font).
+    /// Weather Icons font glyph for Slint GUI.
+    /// Uses codepoints from the Weather Icons TTF (erikflowers.github.io/weather-icons).
     pub fn gui_icon(&self) -> &'static str {
         match self {
-            Self::Clear => "*",
-            Self::Clouds => "**",
-            Self::Rain => "///",
-            Self::Drizzle => "//",
-            Self::Thunderstorm => "/!\\",
-            Self::Snow => "***",
-            Self::Mist | Self::Fog => "---",
-            Self::Smoke | Self::Dust | Self::Sand | Self::Squall => "~~~",
-            Self::Haze => "...",
-            Self::Ash => "^^^",
-            Self::Tornado => "@",
+            Self::Clear => "\u{f00d}",            // wi-day-sunny
+            Self::Clouds => "\u{f013}",           // wi-cloudy
+            Self::Rain => "\u{f019}",             // wi-rain
+            Self::Drizzle => "\u{f01a}",          // wi-showers
+            Self::Thunderstorm => "\u{f01e}",     // wi-thunderstorm
+            Self::Snow => "\u{f01b}",             // wi-snow
+            Self::Mist | Self::Fog => "\u{f014}", // wi-fog
+            Self::Smoke | Self::Dust | Self::Sand | Self::Squall => "\u{f063}", // wi-dust
+            Self::Haze => "\u{f0b6}",             // wi-day-haze
+            Self::Ash => "\u{f063}",              // wi-dust
+            Self::Tornado => "\u{f056}",          // wi-tornado
             Self::Unknown => "?",
         }
     }
