@@ -2,7 +2,7 @@ import { Theme } from "../theme.slint";
 import { AlertData } from "../types.slint";
 import { Card } from "../card.slint";
 
-// Content area: 320 x 134 — up to two alerts of 64 px, or the all-clear.
+// Content area: 320 x 134. The most severe alert, big; the rest are counted.
 export component AlertsPage inherits Rectangle {
     in property <[AlertData]> alerts;
 
@@ -16,73 +16,74 @@ export component AlertsPage inherits Rectangle {
         width: 308px;
         height: 132px;
         Text {
-            y: 38px;
+            y: 34px;
             width: parent.width;
             horizontal-alignment: center;
             text: "No active alerts";
             font-family: Theme.font;
-            font-size: 16px;
+            font-size: 24px;
             font-weight: 700;
             color: Theme.good;
         }
         Text {
-            y: 64px;
+            y: 72px;
             width: parent.width;
             horizontal-alignment: center;
-            text: "Conditions are normal for your area.";
+            text: "Conditions are normal.";
             font-family: Theme.font;
-            font-size: 10px;
+            font-size: 15px;
             color: Theme.muted;
         }
     }
 
-    for a[i] in alerts: Card {
-        visible: i < 2;
+    if alerts.length > 0: Card {
         clip: true;
         x: 6px;
-        y: 2px + i * 68px;
+        y: 2px;
         width: 308px;
-        height: 64px;
-        Rectangle { x: 0px; y: 0px; width: 5px; height: parent.height; background: root.sev-color(a.level); }
+        height: 132px;
+        Rectangle { x: 0px; y: 0px; width: 8px; height: parent.height; background: root.sev-color(alerts[0].level); }
         Text {
-            x: 14px;
-            y: 5px;
-            width: 200px;
-            text: a.event;
+            x: 20px;
+            y: 8px;
+            width: 190px;
+            text: alerts[0].event;
             font-family: Theme.font;
-            font-size: 13px;
+            font-size: 22px;
             font-weight: 700;
             color: Theme.text;
             overflow: elide;
         }
         Text {
-            x: parent.width - 10px - self.width;
-            y: 7px;
-            text: a.severity;
+            x: parent.width - 12px - self.width;
+            y: 12px;
+            text: alerts[0].severity;
             font-family: Theme.font;
-            font-size: 10px;
+            font-size: 14px;
             font-weight: 700;
-            color: root.sev-color(a.level);
+            color: root.sev-color(alerts[0].level);
         }
         Text {
-            x: 14px;
-            y: 24px;
-            width: parent.width - 24px;
-            height: 26px;
-            text: a.description;
+            x: 20px;
+            y: 42px;
+            width: parent.width - 32px;
+            height: 56px;
+            text: alerts[0].description;
             wrap: word-wrap;
             overflow: elide;
             font-family: Theme.font;
-            font-size: 9px;
+            font-size: 15px;
             color: Theme.muted;
         }
         Text {
-            x: 14px;
-            y: 51px;
-            text: a.period;
+            x: 20px;
+            y: 104px;
+            width: parent.width - 32px;
+            text: alerts.length > 1 ? "+" + (alerts.length - 1) + " more · " + alerts[0].period : alerts[0].period;
             font-family: Theme.font;
-            font-size: 8px;
+            font-size: 12px;
             color: Theme.faint;
+            overflow: elide;
         }
     }
 }

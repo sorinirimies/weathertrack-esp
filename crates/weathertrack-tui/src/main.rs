@@ -108,7 +108,20 @@ fn main() {
     splash::draw_status(&mut display, 1, "Reading config...", Rgb565::WHITE);
     let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
     let mut cfg = nvs::load_config(&nvs_store, &DEFAULTS);
-    if !cfg.from_nvs {
+    // config.toml (baked in at build time) wins over stale values left in NVS by an older flash.
+    if !WIFI_SSID.is_empty() {
+        cfg.ssid = WIFI_SSID.to_string();
+        cfg.pass = WIFI_PASS.to_string();
+    }
+    let configured = weathertrack_core::location::baked_location(
+        option_env!("DEFAULT_LAT"),
+        option_env!("DEFAULT_LON"),
+        option_env!("DEFAULT_LOCATION"),
+    );
+    if let Some((lat, lon, name)) = &configured {
+        (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
+    }
+    if !cfg.from_nvs || configured.is_some() {
         nvs::save_config(&mut nvs_store, &cfg);
         splash::draw_status(&mut display, 1, "Using defaults", Rgb565::YELLOW);
     } else {
@@ -117,7 +130,7 @@ fn main() {
 
     // ── Load cached weather (instant boot display) ──────────────────
     let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
-    if let Some(snapshot) = nvs::cache_load(&nvs_store) {
+    if let Some(snapshot) = nvs::cache_load(&nvs_store).filter(|s| s.location == cfg.location) {
         splash::draw_status(&mut display, 2, "Cached weather loaded", Rgb565::GREEN);
         log::info!("Showing cached weather from {}", snapshot.timestamp);
         let cached_current = snapshot.to_current_weather();
@@ -161,7 +174,7 @@ fn main() {
 
     // ── Geolocation ─────────────────────────────────────────────────
     let is_default = (cfg.lat - DEFAULTS.lat).abs() < 0.01 && (cfg.lon - DEFAULTS.lon).abs() < 0.01;
-    if !cfg.from_nvs || is_default {
+    if configured.is_none() && (!cfg.from_nvs || is_default) {
         splash::draw_status(&mut display, 3, "Detecting location...", Rgb565::WHITE);
         if let Ok(loc) = net::fetch_ip_location() {
             cfg.lat = loc.latitude;
@@ -235,13 +248,18 @@ fn main() {
     let backend = EmbeddedBackend::new(
         &mut display,
         EmbeddedBackendConfig {
-            // 6x10 Unicode font: 53x17 cells on the 320x172 LCD (box drawing and blocks included).
-            font_regular: fonts::MONO_6X10,
-            font_bold: None,
+            // 9x15 Unicode font: 35x11 cells on the 320x172 LCD, big enough to read from a distance.
+            font_regular: fonts::MONO_9X15,
+            font_bold: Some(fonts::MONO_9X15_BOLD),
             ..EmbeddedBackendConfig::default()
         },
     );
     let mut term = Terminal::new(backend).unwrap();
+    // 9x15 font: 35x11 cells; the compact layout has seven big pages
+    let screen = {
+        let size = term.size().unwrap();
+        ratatui::layout::Rect::new(0, 0, size.width, size.height)
+    };
 
     // ── Event loop ──────────────────────────────────────────────────
     let button = PinDriver::input(p.pins.gpio9).unwrap();
@@ -279,7 +297,7 @@ fn main() {
                     weathertrack_tui_ui::theme_name(ui_state.theme)
                 );
             } else {
-                ui_state.next_tab();
+                ui_state.next_page(screen);
             }
             redraw = true;
         }

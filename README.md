@@ -39,7 +39,15 @@ The terminal UI draws its charts with [tui-chart](https://github.com/sorinirimie
 |---|---|---|
 | ![P4 TUI hourly](docs/screenshots/p4-tui-hourly.png) | ![P4 TUI week](docs/screenshots/p4-tui-week.png) | ![P4 TUI details](docs/screenshots/p4-tui-details.png) |
 
-On the C6's small screen the same UI switches to a compact layout:
+### Made to be read from a distance (C6)
+
+The C6's 320×172 screen is small, so its UIs trade density for size: **nothing under 12 px, one idea per page, headline numbers 40–84 px**. Both UIs have seven pages (now, next hours, 24-hour chart, week, wind + humidity, UV + pressure, sun + rain) plus an alerts page, flipped with the BOOT button. The terminal UI uses a 9×15 font (35×11 cells) with block-letter digits.
+
+| Slint · now | Slint · wind + humidity | Terminal · now | Terminal · wind + humidity |
+|---|---|---|---|
+| ![](docs/screenshots/c6-slint-today.png) | ![](docs/screenshots/c6-slint-wind.png) | ![](docs/screenshots/c6-tui-today.png) | ![](docs/screenshots/c6-tui-wind.png) |
+
+Terminal UI, 7 days on the C6:
 
 ![C6 TUI week](docs/screenshots/c6-tui-week.png)
 

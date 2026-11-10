@@ -70,10 +70,12 @@ fn main() {
     );
     app.set_loading(false);
     app.set_offline(std::env::var("OFFLINE").is_ok());
-    app.set_page_count(5);
-    for (i, n) in ["1-today", "2-hourly", "3-week", "4-details", "5-alerts"]
-        .iter()
-        .enumerate()
+    app.set_page_count(8);
+    for (i, n) in [
+        "1-now", "2-hours", "3-chart", "4-week", "5-wind", "6-uv", "7-sun", "8-alerts",
+    ]
+    .iter()
+    .enumerate()
     {
         app.set_page(i as i32);
         shot(n);

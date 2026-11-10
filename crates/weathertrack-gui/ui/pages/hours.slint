@@ -1,0 +1,61 @@
+import { Theme } from "../theme.slint";
+import { HourData } from "../types.slint";
+import { Card, Caption } from "../card.slint";
+
+// Content area: 320 x 134. The next four hours, big.
+export component HoursPage inherits Rectangle {
+    in property <[HourData]> hours;
+
+    Card {
+        x: 6px;
+        y: 2px;
+        width: 308px;
+        height: 132px;
+
+        for h[i] in root.hours: Rectangle {
+            visible: i < 4;
+            x: 4px + i * 75px;
+            y: 0px;
+            width: 75px;
+            height: 132px;
+            Text {
+                y: 10px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: i == 0 ? "Now" : h.time;
+                font-family: Theme.font;
+                font-size: 15px;
+                font-weight: 700;
+                color: Theme.muted;
+            }
+            Text {
+                y: 30px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.icon;
+                font-family: Theme.icon-font;
+                font-size: 32px;
+                color: Theme.warm;
+            }
+            Text {
+                y: 66px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.temp + "°";
+                font-family: Theme.font;
+                font-size: 28px;
+                font-weight: 700;
+                color: Theme.temp-color(h.temp-val);
+            }
+            Text {
+                y: 100px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.rain-pct + "%";
+                font-family: Theme.font;
+                font-size: 15px;
+                color: h.rain-pct >= 50 ? Theme.rain : Theme.faint;
+            }
+        }
+    }
+}

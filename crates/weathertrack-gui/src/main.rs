@@ -45,9 +45,10 @@ fn heap_note(what: &str) {
     log::info!("heap {what}: free {free}, largest block {largest}");
 }
 
-/// Now, hourly, week, details — plus alerts while there are any.
+/// Seven big pages (now, hours, chart, week, wind + humidity, UV + pressure, sun + rain), plus
+/// alerts while there are any.
 fn page_count(model: &app::Model) -> i32 {
-    4 + i32::from(!model.alerts.is_empty())
+    7 + i32::from(!model.alerts.is_empty())
 }
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -137,6 +138,14 @@ fn main() {
         cfg.pass = WIFI_PASS.to_string();
     }
     log::info!("WiFi network: '{}' (from_nvs={})", cfg.ssid, cfg.from_nvs);
+    let configured = weathertrack_core::location::baked_location(
+        option_env!("DEFAULT_LAT"),
+        option_env!("DEFAULT_LON"),
+        option_env!("DEFAULT_LOCATION"),
+    );
+    if let Some((lat, lon, name)) = &configured {
+        (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
+    }
     nvs::save_config(&mut nvs_store, &cfg);
 
     // ── WiFi ────────────────────────────────────────────────────────
@@ -150,7 +159,7 @@ fn main() {
 
     // ── Geolocation ─────────────────────────────────────────────────
     let is_default = (cfg.lat - DEFAULTS.lat).abs() < 0.01 && (cfg.lon - DEFAULTS.lon).abs() < 0.01;
-    if !cfg.from_nvs || is_default {
+    if configured.is_none() && (!cfg.from_nvs || is_default) {
         slint_app.set_loading_status("Detecting location...".into());
         window.request_redraw();
         platform::render(&window, &mut display);

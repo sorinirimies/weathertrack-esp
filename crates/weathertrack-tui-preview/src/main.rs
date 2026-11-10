@@ -13,8 +13,9 @@ use mousefood::embedded_graphics::{
     Pixel,
 };
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
+use ratatui::layout::Rect;
 use ratatui::Terminal;
-use weathertrack_tui_ui::{HOURS, TABS, UiState, draw, theme_count, theme_name};
+use weathertrack_tui_ui::{draw, page_names, theme_count, theme_name, UiState, HOURS};
 use weathertrack_view::{sample, ViewModel};
 
 /// A pixel buffer standing in for the LCD.
@@ -47,7 +48,13 @@ impl DrawTarget for Screen {
     }
 }
 
-fn render(w: u32, h: u32, font: MonoFont<'static>, vm: &ViewModel, state: &UiState) -> Screen {
+fn render(
+    w: u32,
+    h: u32,
+    fonts: (MonoFont<'static>, Option<MonoFont<'static>>),
+    vm: &ViewModel,
+    state: &UiState,
+) -> Screen {
     let mut screen = Screen {
         w,
         h,
@@ -55,8 +62,8 @@ fn render(w: u32, h: u32, font: MonoFont<'static>, vm: &ViewModel, state: &UiSta
     };
     {
         let config = EmbeddedBackendConfig {
-            font_regular: font,
-            font_bold: None,
+            font_regular: fonts.0,
+            font_bold: fonts.1,
             ..Default::default()
         };
         let backend = EmbeddedBackend::new(&mut screen, config);
@@ -106,16 +113,27 @@ fn main() {
                 .unwrap_or(0)
         })
     });
+    // C6 LCD: 9x15 (35x11 cells, readable from a distance); P4 panel: 10x20 (102x30 cells).
     let screens = [
-        ("c6", 320, 172, fonts::MONO_6X10, 3),
-        ("p4", 1024, 600, fonts::MONO_10X20, 1),
+        (
+            "c6",
+            320,
+            172,
+            (fonts::MONO_9X15, Some(fonts::MONO_9X15_BOLD)),
+            3,
+        ),
+        ("p4", 1024, 600, (fonts::MONO_10X20, None), 1),
     ];
 
     if std::env::var("THEMES").is_ok() {
         std::fs::create_dir_all(format!("{dir}/themes")).expect("themes dir");
         for i in 0..theme_count() {
             for (name, w, h, font, scale) in &screens {
-                for (tab, page) in [(0, "today"), (1, "hourly"), (3, "details")] {
+                for (tab, page) in [
+                    (0, "today"),
+                    (1, "hourly"),
+                    (if *name == "c6" { 4 } else { 3 }, "details"),
+                ] {
                     let state = UiState {
                         tab,
                         offline,
@@ -136,7 +154,13 @@ fn main() {
 
     for (name, w, h, font, scale) in screens {
         println!("{name} (theme {})", theme_name(theme));
-        for (tab, label) in TABS.iter().enumerate() {
+        let names = page_names(Rect::new(
+            0,
+            0,
+            (w / if name == "c6" { 9 } else { 10 }) as u16,
+            (h / if name == "c6" { 15 } else { 20 }) as u16,
+        ));
+        for (tab, label) in names.iter().enumerate() {
             let state = UiState {
                 tab,
                 offline,

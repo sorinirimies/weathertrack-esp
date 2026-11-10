@@ -1,0 +1,40 @@
+import { Theme } from "../theme.slint";
+import { CurrentData } from "../types.slint";
+import { BigStat } from "../card.slint";
+
+// Content area: 320 x 134. Two big numbers per page.
+export component StatsPage inherits Rectangle {
+    in property <CurrentData> cur;
+    // 0 wind + humidity, 1 UV + pressure, 2 sun + precipitation
+    in property <int> kind: 0;
+
+    if kind == 0: BigStat {
+        x: 6px; y: 2px; width: 150px; height: 132px;
+        title: "WIND"; value: cur.wind-speed; unit: "km/h " + cur.wind-dir; sub: "gusts " + cur.gusts + " km/h";
+    }
+    if kind == 0: BigStat {
+        x: 164px; y: 2px; width: 150px; height: 132px;
+        title: "HUMIDITY"; value: Math.round(cur.humidity) + "%"; unit: "relative"; sub: cur.humidity < 30 ? "Dry" : cur.humidity < 60 ? "Comfortable" : cur.humidity < 80 ? "Humid" : "Very humid";
+        fraction: cur.humidity / 100; accent: Theme.rain;
+    }
+    if kind == 1: BigStat {
+        x: 6px; y: 2px; width: 150px; height: 132px;
+        title: "UV INDEX"; value: Math.round(cur.uv); unit: cur.uv-label; sub: cur.uv < 3 ? "No protection" : cur.uv < 6 ? "Sunscreen" : "Seek shade";
+        value-color: Theme.uv-color(cur.uv); fraction: cur.uv / 11; accent: Theme.uv-color(cur.uv);
+    }
+    if kind == 1: BigStat {
+        x: 164px; y: 2px; width: 150px; height: 132px;
+        title: "PRESSURE"; value: cur.pressure; unit: "hPa"; sub: cur.pressure-label;
+        fraction: (cur.pressure.to-float() - 970) / 70; accent: Theme.muted;
+    }
+    if kind == 2: BigStat {
+        x: 6px; y: 2px; width: 150px; height: 132px;
+        title: "SUNRISE"; value: cur.sunrise; unit: "sunset " + cur.sunset; sub: cur.daylight;
+        fraction: cur.sun-progress; accent: Theme.warm;
+    }
+    if kind == 2: BigStat {
+        x: 164px; y: 2px; width: 150px; height: 132px;
+        title: "PRECIPITATION"; value: cur.precip; unit: "mm now"; sub: "visibility " + cur.visibility + " km";
+        accent: Theme.rain;
+    }
+}

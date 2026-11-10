@@ -14,6 +14,8 @@ fn glyph(c: char) -> [&'static str; 5] {
         '8' => ["###", "# #", "###", "# #", "###"],
         '9' => ["###", "# #", "###", "  #", "###"],
         '-' => ["   ", "   ", "###", "   ", "   "],
+        ':' => ["   ", " # ", "   ", " # ", "   "],
+        '.' => ["   ", "   ", "   ", "   ", " # "],
         _ => ["   ", "   ", "   ", "   ", "   "],
     }
 }
@@ -136,6 +138,19 @@ mod tests {
         assert_eq!(rows.len(), 5);
         assert!(rows.iter().all(|r| r.chars().count() == big_width("12", 2)));
         assert_eq!(big("7", 1, 2).len(), 10);
+    }
+
+    #[test]
+    fn colon_and_point_fit_the_grid() {
+        for text in ["6:58", "0.0", "-3"] {
+            let rows = big(text, 1, 1);
+            assert_eq!(rows.len(), 5);
+            assert!(
+                rows.iter().all(|r| r.chars().count() == big_width(text, 1)),
+                "{text}"
+            );
+        }
+        assert!(big(":", 1, 1)[1].contains('█'));
     }
 
     #[test]

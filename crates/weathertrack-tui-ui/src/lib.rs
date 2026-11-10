@@ -5,6 +5,7 @@
 //! ratatui [`Buffer`] from a [`ViewModel`], so it is tested on the host and rendered on the
 //! device through `mousefood`.
 
+mod compact;
 mod glyphs;
 mod pages;
 mod theme;
@@ -17,7 +18,7 @@ use weathertrack_view::ViewModel;
 
 pub use glyphs::{art, big, big_width};
 
-/// The pages, in order.
+/// The pages of the wide layout, in order (the compact layout has its own, see [`page_names`]).
 pub const TABS: [&str; 5] = ["Today", "Hourly", "7 Days", "Details", "Alerts"];
 /// Hourly entries the pages expect in [`ViewModel::hours`].
 pub const HOURS: usize = 24;
@@ -42,9 +43,32 @@ impl UiState {
     pub fn prev_tab(&mut self) {
         self.tab = (self.tab + TABS.len() - 1) % TABS.len();
     }
+    /// Next page for a screen of `area`: 5 wide pages or 7 compact ones (wraps around).
+    pub fn next_page(&mut self, area: Rect) {
+        self.tab = (self.tab + 1) % page_count(area);
+    }
+    /// Previous page for a screen of `area` (wraps around).
+    pub fn prev_page(&mut self, area: Rect) {
+        let n = page_count(area);
+        self.tab = (self.tab % n + n - 1) % n;
+    }
     /// Select the next colour theme (wraps around).
     pub fn next_theme(&mut self) {
         self.theme = (self.theme + 1) % theme_count();
+    }
+}
+
+/// Number of pages for a screen of `area`.
+pub fn page_count(area: Rect) -> usize {
+    page_names(area).len()
+}
+
+/// Names of the pages for a screen of `area`: the five tabs of the wide layout, or the seven big
+/// pages of the compact one.
+pub fn page_names(area: Rect) -> &'static [&'static str] {
+    match Density::of(area) {
+        Density::Wide => &TABS,
+        Density::Compact => &compact::PAGES,
     }
 }
 
@@ -87,7 +111,10 @@ pub fn draw(frame: &mut Frame, vm: &ViewModel, state: &UiState) {
 pub fn render(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     theme::select(state.theme);
     widgets::clear(buf, area);
-    pages::screen(area, buf, vm, state);
+    match Density::of(area) {
+        Density::Compact => compact::screen(area, buf, vm, state),
+        Density::Wide => pages::screen(area, buf, vm, state),
+    }
 }
 
 /// The boot screen: title, what is happening, and a progress bar (0..=1).
@@ -164,6 +191,14 @@ mod tests {
             .join("\n")
     }
 
+    /// Index of the page called `name` for a `w` x `h` screen.
+    fn page(w: u16, h: u16, name: &str) -> usize {
+        page_names(Rect::new(0, 0, w, h))
+            .iter()
+            .position(|n| *n == name)
+            .unwrap_or_else(|| panic!("no page {name} at {w}x{h}"))
+    }
+
     fn shot(w: u16, h: u16, tab: usize, offline: bool, alerts: bool) -> String {
         let vm = ViewModel::from_model(&sample::model(alerts), HOURS);
         let area = Rect::new(0, 0, w, h);
@@ -182,7 +217,7 @@ mod tests {
         text(&buf)
     }
 
-    const COMPACT: (u16, u16) = (53, 17);
+    const COMPACT: (u16, u16) = (35, 11);
     const WIDE: (u16, u16) = (102, 30);
 
     #[test]
@@ -202,7 +237,7 @@ mod tests {
     #[test]
     fn every_page_renders_at_both_sizes_with_the_location() {
         for (w, h) in [COMPACT, WIDE] {
-            for tab in 0..TABS.len() {
+            for tab in 0..page_count(Rect::new(0, 0, w, h)) {
                 let s = shot(w, h, tab, false, true);
                 assert!(s.contains("Cluj-Napoca"), "{w}x{h} tab {tab}:\n{s}");
                 assert_eq!(s.lines().count(), usize::from(h));
@@ -220,21 +255,43 @@ mod tests {
     }
 
     #[test]
-    fn the_week_lists_seven_days_with_today_first() {
-        for (w, h) in [COMPACT, WIDE] {
-            let s = shot(w, h, 2, false, false);
+    fn the_week_lists_the_days_with_today_first() {
+        // wide: all seven; compact: five, fewer and bigger
+        for ((w, h), days) in [
+            (COMPACT, &["Tue", "Wed", "Thu", "Fri"][..]),
+            (WIDE, &["Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][..]),
+        ] {
+            let s = shot(
+                w,
+                h,
+                page(w, h, if w < 90 { "Week" } else { "7 Days" }),
+                false,
+                false,
+            );
             assert!(s.contains("Today"));
-            for d in ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
+            for d in days {
                 assert!(s.contains(d), "{d} missing at {w}x{h}\n{s}");
             }
         }
+        let compact = shot(
+            COMPACT.0,
+            COMPACT.1,
+            page(COMPACT.0, COMPACT.1, "Week"),
+            false,
+            false,
+        );
+        assert!(
+            !compact.contains("Sat"),
+            "the compact week shows five days:\n{compact}"
+        );
     }
 
     #[test]
     fn alerts_page_shows_alerts_or_the_all_clear() {
         for (w, h) in [COMPACT, WIDE] {
-            assert!(shot(w, h, 4, false, true).contains("Heavy rain"));
-            assert!(shot(w, h, 4, false, false).contains("No active weather alerts"));
+            let tab = page(w, h, "Alerts");
+            assert!(shot(w, h, tab, false, true).contains("Heavy rain"));
+            assert!(shot(w, h, tab, false, false).contains("No active"));
         }
     }
 
@@ -252,14 +309,14 @@ mod tests {
         let area = Rect::new(0, 0, 53, 17);
         let mut buf = Buffer::empty(area);
         render(area, &mut buf, &vm, &UiState::default());
-        assert!(text(&buf).contains("Waiting for the first forecast"));
+        assert!(text(&buf).contains("Waiting for"));
     }
 
     #[test]
     fn tiny_areas_do_not_panic() {
         let vm = ViewModel::from_model(&sample::model(true), HOURS);
         for (w, h) in [(1, 1), (10, 3), (30, 8), (53, 5)] {
-            for tab in 0..TABS.len() {
+            for tab in 0..page_count(Rect::new(0, 0, w, h)) {
                 let area = Rect::new(0, 0, w, h);
                 render(
                     area,
@@ -321,7 +378,7 @@ mod tests {
         let vm = ViewModel::from_model(&sample::model(true), HOURS);
         for theme in 0..theme_count() {
             for (w, h) in [COMPACT, WIDE] {
-                for tab in 0..TABS.len() {
+                for tab in 0..page_count(Rect::new(0, 0, w, h)) {
                     let area = Rect::new(0, 0, w, h);
                     let mut buf = Buffer::empty(area);
                     render(
@@ -393,6 +450,53 @@ mod tests {
             COMPACT.0 - 2,
             1
         ));
+    }
+
+    #[test]
+    fn the_compact_layout_has_seven_big_pages_with_their_key_numbers() {
+        let (w, h) = COMPACT;
+        let area = Rect::new(0, 0, w, h);
+        assert_eq!(page_count(area), 7);
+        assert_eq!(page_count(Rect::new(0, 0, WIDE.0, WIDE.1)), 5);
+        for (name, needles) in [
+            ("Now", &["Clear", "°C", "Now"][..]),
+            ("Hourly", &["Next 24 hours"][..]),
+            ("Wind", &["WIND", "HUMIDITY", "gusts"][..]),
+            ("Air", &["UV INDEX", "PRESSURE", "hPa"][..]),
+            ("Sun", &["SUNRISE", "PRECIP", "sets"][..]),
+        ] {
+            let s = shot(w, h, page(w, h, name), false, false);
+            for n in needles {
+                assert!(s.contains(n), "{name}: {n} missing\n{s}");
+            }
+            assert!(s.contains(name), "the footer names the page {name}");
+        }
+        assert!(
+            shot(w, h, page(w, h, "Wind"), false, false).contains('█'),
+            "big digits"
+        );
+    }
+
+    #[test]
+    fn pages_wrap_by_screen_size() {
+        let compact = Rect::new(0, 0, COMPACT.0, COMPACT.1);
+        let wide = Rect::new(0, 0, WIDE.0, WIDE.1);
+        let mut s = UiState {
+            tab: 6,
+            ..UiState::default()
+        };
+        s.next_page(compact);
+        assert_eq!(s.tab, 0);
+        s.prev_page(compact);
+        assert_eq!(s.tab, 6);
+        let mut s = UiState {
+            tab: 4,
+            ..UiState::default()
+        };
+        s.next_page(wide);
+        assert_eq!(s.tab, 0);
+        s.prev_page(wide);
+        assert_eq!(s.tab, 4);
     }
 
     #[test]

@@ -1,4 +1,5 @@
-//! The five pages, each in a compact and a wide variant.
+//! The five pages of the wide layout (the P4's 1024x600 touch screen). The compact layout
+//! (the C6's 320x172 LCD) has its own, bigger pages in `compact.rs`.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -7,7 +8,7 @@ use weathertrack_view::{AlertView, CurrentView, ViewModel};
 
 use crate::glyphs::{art, big, big_width};
 use crate::widgets::{frame, gauge, put, put_center, put_right, width};
-use crate::{Density, TABS, UiState, theme};
+use crate::{TABS, UiState, theme};
 use ratatui::widgets::Widget;
 use tui_chart::{
     Axis, Gauge, GaugeStyle, LegendPosition, LineChart, LineMode, LollipopChart, LollipopItem,
@@ -20,42 +21,33 @@ pub const TAB_BAR_ROWS: u16 = 3;
 pub const THEME_BUTTON_W: u16 = 30;
 
 pub fn screen(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
-    let density = Density::of(area);
-    let (head, foot) = match density {
-        Density::Compact => (1, 1),
-        Density::Wide => (HEADER_ROWS, TAB_BAR_ROWS),
-    };
     let body = Rect::new(
         area.x,
-        area.y + head,
+        area.y + HEADER_ROWS,
         area.width,
-        area.height.saturating_sub(head + foot),
+        area.height.saturating_sub(HEADER_ROWS + TAB_BAR_ROWS),
     );
     header(
-        Rect::new(area.x, area.y, area.width, head),
+        Rect::new(area.x, area.y, area.width, HEADER_ROWS),
         buf,
         vm,
         state,
-        density,
     );
     match (&vm.current, state.tab) {
         (None, _) => waiting(body, buf),
-        (Some(c), 0) => now(body, buf, vm, c, density),
-        (Some(_), 1) => hourly(body, buf, vm, density),
-        (Some(_), 2) => week(body, buf, vm, density),
-        (Some(c), 3) => details(body, buf, vm, c, density),
-        (Some(_), _) => alerts(body, buf, &vm.alerts, density),
+        (Some(c), 0) => now_wide(body, buf, vm, c),
+        (Some(_), 1) => hourly(body, buf, vm),
+        (Some(_), 2) => week(body, buf, vm),
+        (Some(c), 3) => details(body, buf, vm, c),
+        (Some(_), _) => alerts(body, buf, &vm.alerts),
     }
     let foot_area = Rect::new(
         area.x,
-        area.bottom().saturating_sub(foot),
+        area.bottom().saturating_sub(TAB_BAR_ROWS),
         area.width,
-        foot.min(area.height),
+        TAB_BAR_ROWS.min(area.height),
     );
-    match density {
-        Density::Compact => dots(foot_area, buf, vm, state),
-        Density::Wide => tab_bar(foot_area, buf, vm, state),
-    }
+    tab_bar(foot_area, buf, vm, state);
 }
 
 fn waiting(body: Rect, buf: &mut Buffer) {
@@ -70,7 +62,7 @@ fn waiting(body: Rect, buf: &mut Buffer) {
 
 // ── header, footer ──────────────────────────────────────────────────────────
 
-fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, density: Density) {
+fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     let updated = vm.current.as_ref().map_or("", |c| c.updated.as_str());
     put(
         buf,
@@ -80,113 +72,53 @@ fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, density
         &vm.location,
         theme::bold(theme::c_text()),
     );
-    match density {
-        Density::Compact => {
-            let (text, color) = if state.refreshing {
-                ("Refreshing...".to_string(), theme::c_muted())
-            } else if state.offline {
-                (format!("OFFLINE  {updated}"), theme::c_warm())
-            } else {
-                (updated.to_string(), theme::c_faint())
-            };
-            put_right(
-                buf,
-                area,
-                area.top(),
-                &format!("{text} "),
-                theme::on_bg(color),
-            );
-        }
-        Density::Wide => {
-            put(
-                buf,
-                area,
-                area.left() + 1,
-                area.top() + 1,
-                updated,
-                theme::faint(),
-            );
-            let pill = format!("[ Theme: {} > ]", crate::theme_name(state.theme));
-            put(
-                buf,
-                area,
-                area.right().saturating_sub(width(&pill) + 1),
-                area.top() + 1,
-                &pill,
-                theme::muted(),
-            );
-            let label = if state.refreshing {
-                "[ Refreshing... ]"
-            } else {
-                "[    Refresh   ]"
-            };
-            let w = width(label);
-            put(
-                buf,
-                area,
-                area.right().saturating_sub(w + 1),
-                area.top(),
-                label,
-                theme::bold(if state.refreshing {
-                    theme::c_muted()
-                } else {
-                    theme::c_accent()
-                }),
-            );
-            if state.offline {
-                let badge = format!(" OFFLINE - {updated} ");
-                put(
-                    buf,
-                    area,
-                    area.right().saturating_sub(w + 3 + width(&badge)),
-                    area.top(),
-                    &badge,
-                    theme::bold(theme::c_warm()),
-                );
-            }
-        }
-    }
-}
-
-/// "● ○ ○ ○ ○  Today" — the page indicator of the compact layout.
-fn dots(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
-    let mut x = area.left() + 1;
-    for i in 0..TABS.len() {
-        let on = i == state.tab;
-        put(
-            buf,
-            area,
-            x,
-            area.top(),
-            if on { "●" } else { "○" },
-            theme::on_bg(if on {
-                theme::c_accent()
-            } else {
-                theme::c_faint()
-            }),
-        );
-        x += 2;
-    }
-    let name = if state.tab == 4 && !vm.alerts.is_empty() {
-        format!("Alerts ({})", vm.alerts.len())
+    put(
+        buf,
+        area,
+        area.left() + 1,
+        area.top() + 1,
+        updated,
+        theme::faint(),
+    );
+    let pill = format!("[ Theme: {} > ]", crate::theme_name(state.theme));
+    put(
+        buf,
+        area,
+        area.right().saturating_sub(width(&pill) + 1),
+        area.top() + 1,
+        &pill,
+        theme::muted(),
+    );
+    let label = if state.refreshing {
+        "[ Refreshing... ]"
     } else {
-        TABS[state.tab.min(TABS.len() - 1)].to_string()
+        "[    Refresh   ]"
+    };
+    let w = width(label);
+    let color = if state.refreshing {
+        theme::c_muted()
+    } else {
+        theme::c_accent()
     };
     put(
         buf,
         area,
-        x + 1,
+        area.right().saturating_sub(w + 1),
         area.top(),
-        &name,
-        theme::bold(theme::c_accent()),
+        label,
+        theme::bold(color),
     );
-    put_right(
-        buf,
-        area,
-        area.top(),
-        &format!("{}  hold BOOT: theme ", crate::theme_name(state.theme)),
-        theme::faint(),
-    );
+    if state.offline {
+        let badge = format!(" OFFLINE - {updated} ");
+        put(
+            buf,
+            area,
+            area.right().saturating_sub(w + 3 + width(&badge)),
+            area.top(),
+            &badge,
+            theme::bold(theme::c_warm()),
+        );
+    }
 }
 
 fn tab_bar(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
@@ -221,7 +153,7 @@ fn tab_bar(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
 
 // ── Today ───────────────────────────────────────────────────────────────────
 
-fn art_color(tag: &str, is_day: bool) -> Color {
+pub(crate) fn art_color(tag: &str, is_day: bool) -> Color {
     match tag {
         "SUN" if is_day => theme::c_warm(),
         "RAN" | "DRZ" | "STM" => theme::c_rain(),
@@ -230,7 +162,7 @@ fn art_color(tag: &str, is_day: bool) -> Color {
     }
 }
 
-fn draw_art(buf: &mut Buffer, area: Rect, x: u16, y: u16, c: &CurrentView) {
+pub(crate) fn draw_art(buf: &mut Buffer, area: Rect, x: u16, y: u16, c: &CurrentView) {
     for (i, line) in art(&c.tag, c.is_day).iter().enumerate() {
         put(
             buf,
@@ -243,7 +175,7 @@ fn draw_art(buf: &mut Buffer, area: Rect, x: u16, y: u16, c: &CurrentView) {
     }
 }
 
-fn draw_big_temp(
+pub(crate) fn draw_big_temp(
     buf: &mut Buffer,
     area: Rect,
     x: u16,
@@ -266,13 +198,6 @@ fn draw_big_temp(
     let end = x + big_width(&c.temperature, sx) as u16 + 1;
     put(buf, area, end, y, "°C", theme::bold(theme::c_muted()));
     end + 2
-}
-
-fn now(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView, d: Density) {
-    match d {
-        Density::Compact => now_compact(body, buf, vm, c),
-        Density::Wide => now_wide(body, buf, vm, c),
-    }
 }
 
 fn hour_strip(buf: &mut Buffer, area: Rect, vm: &ViewModel, count: usize, col_w: u16, y: u16) {
@@ -305,74 +230,6 @@ fn hour_strip(buf: &mut Buffer, area: Rect, vm: &ViewModel, count: usize, col_w:
             theme::on_bg(theme::c_rain()),
         );
     }
-}
-
-fn now_compact(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
-    let (l, t) = (body.left(), body.top());
-    draw_art(buf, body, l + 1, t, c);
-    let after = draw_big_temp(buf, body, l + 12, t, c, 1, 1);
-    let rx = after.max(l + 24) + 1;
-    put(buf, body, rx, t, &c.condition, theme::bold(theme::c_text()));
-    put(
-        buf,
-        body,
-        rx,
-        t + 1,
-        &format!("Feels {}°", c.feels_like),
-        theme::muted(),
-    );
-    put(
-        buf,
-        body,
-        rx,
-        t + 2,
-        &format!("H {}°  L {}°", c.high, c.low),
-        theme::muted(),
-    );
-    put(
-        buf,
-        body,
-        rx,
-        t + 3,
-        &format!("Wind {} {}", c.wind_speed, c.wind_dir),
-        theme::muted(),
-    );
-    put(
-        buf,
-        body,
-        rx,
-        t + 4,
-        &format!("UV {} {}", c.uv.round(), c.uv_label),
-        theme::on_bg(theme::uv_color(c.uv)),
-    );
-
-    let rows = [
-        (
-            "Humidity",
-            c.humidity / 100.0,
-            theme::c_rain(),
-            format!("{:.0}%", c.humidity),
-        ),
-        (
-            "UV index",
-            c.uv / 11.0,
-            theme::uv_color(c.uv),
-            format!("{:.0}", c.uv),
-        ),
-        (
-            "Cloud   ",
-            c.cloud / 100.0,
-            theme::c_muted(),
-            format!("{:.0}%", c.cloud),
-        ),
-    ];
-    for (i, (name, frac, color, value)) in rows.iter().enumerate() {
-        let y = t + 6 + i as u16;
-        put(buf, body, l + 1, y, name, theme::muted());
-        gauge(buf, body, l + 10, y, 30, *frac, *color);
-        put(buf, body, l + 41, y, value, theme::bold(theme::c_text()));
-    }
-    hour_strip(buf, body, vm, 6, 8, t + 10);
 }
 
 /// One stat tile of the wide Today page.
@@ -539,13 +396,8 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
 
 // ── Hourly ──────────────────────────────────────────────────────────────────
 
-fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
-    let wide = d == Density::Wide;
-    let area = if wide {
-        frame(buf, body, "Temperature - next 24 hours", theme::c_border())
-    } else {
-        body
-    };
+fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel) {
+    let area = frame(buf, body, "Temperature - next 24 hours", theme::c_border());
     if vm.hours.is_empty() || area.height < 8 {
         return;
     }
@@ -559,7 +411,7 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
     );
 
     // Rain chance as a sparkline under the temperature chart.
-    let rain_h: u16 = if wide { 4 } else { 3 };
+    let rain_h: u16 = 4;
     let chart_area = Rect::new(
         area.left(),
         area.top() + 1,
@@ -584,20 +436,15 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
             )
             .color(color)
     };
-    let mut lines = vec![series("Temp", |h| h.temp_val, theme::c_accent())];
-    if wide {
-        lines.push(series("Feels like", |h| h.feels_val, theme::c_warm()));
-    }
+    let lines = vec![
+        series("Temp", |h| h.temp_val, theme::c_accent()),
+        series("Feels like", |h| h.feels_val, theme::c_warm()),
+    ];
     let labels: Vec<String> = vm.hours.iter().step_by(4).map(|h| h.time.clone()).collect();
     let chart = LineChart::new(lines)
-        // Wide: smooth braille lines (two series). Compact: a half-block line, which stays readable
-        // in the 6x10 font where single braille dots are faint.
+        // Smooth braille lines (the 10x20 font renders them well).
         .mode(LineMode::Line)
-        .marker(if wide {
-            Marker::Braille
-        } else {
-            Marker::HalfBlock
-        })
+        .marker(Marker::Braille)
         .smooth(true)
         .x_axis(
             Axis::new()
@@ -608,17 +455,13 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
         )
         .y_axis(
             Axis::new()
-                .ticks(if wide { 5 } else { 3 })
+                .ticks(5)
                 .label_style(theme::muted())
                 .grid_style(theme::on_bg(theme::c_border()))
                 .formatter(|v| format!("{v:.0}°"))
                 .grid(true),
         )
-        .legend(if wide {
-            LegendPosition::TopRight
-        } else {
-            LegendPosition::None
-        })
+        .legend(LegendPosition::TopRight)
         .theme(theme::nuances());
     (&chart).render(chart_area, buf);
 
@@ -641,13 +484,8 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
 
 // ── 7 days ──────────────────────────────────────────────────────────────────
 
-fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
-    let wide = d == Density::Wide;
-    let area = if wide {
-        frame(buf, body, "7-day forecast (low to high)", theme::c_border())
-    } else {
-        body
-    };
+fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel) {
+    let area = frame(buf, body, "7-day forecast (low to high)", theme::c_border());
     if vm.days.is_empty() {
         return;
     }
@@ -658,17 +496,13 @@ fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
         } else {
             day.weekday.as_str()
         };
-        let label = if wide {
-            format!(
-                "{name:<5} {} {:<8} {:>3}% UV{:.0}",
-                day.tag,
-                format!("{:.0}°/{:.0}°", day.low_val, day.high_val),
-                day.rain_pct,
-                day.uv
-            )
-        } else {
-            format!("{name:<5} {} {:>3}%", day.tag, day.rain_pct)
-        };
+        let label = format!(
+            "{name:<5} {} {:<8} {:>3}% UV{:.0}",
+            day.tag,
+            format!("{:.0}°/{:.0}°", day.low_val, day.high_val),
+            day.rain_pct,
+            day.uv
+        );
         // Whole degrees: the chart prints the value next to the head.
         LollipopItem::new(label, f64::from(day.high_val.round()))
             .from(f64::from(day.low_val.round()))
@@ -684,12 +518,8 @@ fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
 
 // ── Details ─────────────────────────────────────────────────────────────────
 
-fn details(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView, d: Density) {
-    let (cols, rows) = if d == Density::Wide {
-        (3u16, 2u16)
-    } else {
-        (2, 3)
-    };
+fn details(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
+    let (cols, rows) = (3u16, 2u16);
     let (cw, ch) = (body.width / cols, body.height / rows);
     for idx in 0..6u16 {
         let cell = Rect::new(
@@ -698,29 +528,8 @@ fn details(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView, d: Den
             cw,
             ch,
         );
-        let inner = if d == Density::Wide {
-            frame(buf, cell, CARD_TITLES[usize::from(idx)], theme::c_border())
-        } else {
-            put(
-                buf,
-                cell,
-                cell.left() + 1,
-                cell.top(),
-                CARD_TITLES[usize::from(idx)],
-                theme::bold(theme::c_muted()),
-            );
-            Rect::new(
-                cell.left(),
-                cell.top() + 1,
-                cell.width,
-                cell.height.saturating_sub(1),
-            )
-        };
-        if d == Density::Wide {
-            wide_card(buf, inner, usize::from(idx), vm, c);
-        } else {
-            detail_card(buf, inner, usize::from(idx), c, false);
-        }
+        let inner = frame(buf, cell, CARD_TITLES[usize::from(idx)], theme::c_border());
+        wide_card(buf, inner, usize::from(idx), vm, c);
     }
 }
 
@@ -733,216 +542,10 @@ const CARD_TITLES: [&str; 6] = [
     "PRECIPITATION",
 ];
 
-fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: bool) {
-    let x = r.left() + 1;
-    let bw = r.width.saturating_sub(3).min(34);
-    // Wide cards have room for a headline number in big digits, then the details below it.
-    let head = |buf: &mut Buffer, digits: &str, unit: &str, color: Color| -> u16 {
-        for (i, row) in big(digits, 1, 1).iter().enumerate() {
-            put(buf, r, x, r.top() + 1 + i as u16, row, theme::on_bg(color));
-        }
-        put(
-            buf,
-            r,
-            x + big_width(digits, 1) as u16 + 2,
-            r.top() + 5,
-            unit,
-            theme::bold(theme::c_muted()),
-        );
-        r.top() + 7
-    };
-    match idx {
-        0 => {
-            let y = if wide { r.top() + 1 } else { r.top() };
-            put(
-                buf,
-                r,
-                x,
-                y,
-                &format!("Sunrise  {}", c.sunrise),
-                theme::bold(theme::c_text()),
-            );
-            put(
-                buf,
-                r,
-                x,
-                y + 1,
-                &format!("Sunset   {}", c.sunset),
-                theme::bold(theme::c_text()),
-            );
-            put(
-                buf,
-                r,
-                x,
-                y + 2 + u16::from(wide),
-                &c.daylight,
-                theme::muted(),
-            );
-            gauge(
-                buf,
-                r,
-                x,
-                y + 3 + 2 * u16::from(wide),
-                bw,
-                c.sun_progress,
-                theme::c_warm(),
-            );
-        }
-        1 => {
-            let y = if wide {
-                head(buf, &c.wind_speed, "km/h", theme::c_text())
-            } else {
-                put(
-                    buf,
-                    r,
-                    x,
-                    r.top(),
-                    &format!("{} km/h {}", c.wind_speed, c.wind_dir),
-                    theme::bold(theme::c_text()),
-                );
-                r.top() + 1
-            };
-            put(
-                buf,
-                r,
-                x,
-                y,
-                &format!("Gusts {} km/h", c.gusts),
-                theme::muted(),
-            );
-            put(
-                buf,
-                r,
-                x,
-                y + 1,
-                &format!("From {} ({:.0} deg)", c.wind_dir, c.wind_deg),
-                theme::faint(),
-            );
-        }
-        2 => {
-            let y = if wide {
-                head(buf, &format!("{:.0}", c.humidity), "%", theme::c_rain())
-            } else {
-                put(
-                    buf,
-                    r,
-                    x,
-                    r.top(),
-                    &format!(
-                        "{:.0}%  {}",
-                        c.humidity,
-                        weathertrack_view::humidity_label(f64::from(c.humidity))
-                    ),
-                    theme::bold(theme::c_text()),
-                );
-                r.top() + 1
-            };
-            gauge(buf, r, x, y, bw, c.humidity / 100.0, theme::c_rain());
-            put(
-                buf,
-                r,
-                x,
-                y + 1,
-                &format!("Cloud cover {:.0}%", c.cloud),
-                theme::faint(),
-            );
-        }
-        3 => {
-            let y = if wide {
-                head(
-                    buf,
-                    &format!("{:.0}", c.uv),
-                    &c.uv_label,
-                    theme::uv_color(c.uv),
-                )
-            } else {
-                put(
-                    buf,
-                    r,
-                    x,
-                    r.top(),
-                    &format!("{:.0}  {}", c.uv, c.uv_label),
-                    theme::bold(theme::uv_color(c.uv)),
-                );
-                r.top() + 1
-            };
-            gauge(buf, r, x, y, bw, c.uv / 11.0, theme::uv_color(c.uv));
-        }
-        4 => {
-            let y = if wide {
-                head(buf, &c.pressure, "hPa", theme::c_muted())
-            } else {
-                put(
-                    buf,
-                    r,
-                    x,
-                    r.top(),
-                    &format!("{} hPa  {}", c.pressure, c.pressure_label),
-                    theme::bold(theme::c_text()),
-                );
-                r.top() + 1
-            };
-            let p: f32 = c.pressure.parse().unwrap_or(1013.0);
-            gauge(
-                buf,
-                r,
-                x,
-                y,
-                bw,
-                ((p - 970.0) / 70.0).clamp(0.0, 1.0),
-                theme::c_muted(),
-            );
-            put(
-                buf,
-                r,
-                x,
-                y + 1,
-                &format!("970 ... 1040  ({})", c.pressure_label),
-                theme::faint(),
-            );
-        }
-        _ => {
-            let y = if wide {
-                head(buf, &c.precip, "mm now", theme::c_rain())
-            } else {
-                put(
-                    buf,
-                    r,
-                    x,
-                    r.top(),
-                    &format!("{} mm now", c.precip),
-                    theme::bold(theme::c_text()),
-                );
-                r.top() + 1
-            };
-            put(
-                buf,
-                r,
-                x,
-                y,
-                &format!("Rain {} mm  Snow {} cm", c.rain, c.snow),
-                theme::muted(),
-            );
-            put(
-                buf,
-                r,
-                x,
-                y + 1,
-                &format!("Visibility {} km", c.visibility),
-                theme::faint(),
-            );
-        }
-    }
-}
-
 // ── Alerts ──────────────────────────────────────────────────────────────────
 
-fn alerts(body: Rect, buf: &mut Buffer, alerts: &[AlertView], d: Density) {
-    let area = if d == Density::Wide {
-        frame(buf, body, "Alerts", theme::c_border())
-    } else {
-        body
-    };
+fn alerts(body: Rect, buf: &mut Buffer, alerts: &[AlertView]) {
+    let area = frame(buf, body, "Alerts", theme::c_border());
     if alerts.is_empty() {
         let mid = area.top() + area.height / 2;
         put_center(
@@ -961,7 +564,7 @@ fn alerts(body: Rect, buf: &mut Buffer, alerts: &[AlertView], d: Density) {
         );
         return;
     }
-    let per = if d == Density::Wide { 7 } else { 5 };
+    let per = 7;
     let text_w = usize::from(area.width.saturating_sub(5));
     for (i, a) in alerts.iter().enumerate() {
         let y = area.top() + i as u16 * per;
