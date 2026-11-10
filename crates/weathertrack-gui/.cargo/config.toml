@@ -13,3 +13,5 @@ build-std = ["std", "panic_abort"]
 MCU="esp32c6"
 ESP_IDF_VERSION = "v5.3.2"
 ESP_IDF_TOOLS_INSTALL_DIR = "global"
+# Name the file explicitly: auto-discovery silently ignored it (default 2 MB flash, 3.5 KB main stack).
+ESP_IDF_SDKCONFIG_DEFAULTS = { value = "sdkconfig.defaults", relative = true }

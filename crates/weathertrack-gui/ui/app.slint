@@ -1,0 +1,160 @@
+// WeatherTrack — ESP32-C6 LCD 1.47" (320x172, landscape, one BOOT button) UI.
+
+import "fonts/weather-icons.ttf";
+import "fonts/NotoSans-Regular.ttf";
+import "fonts/NotoSans-Bold.ttf";
+
+import { Theme } from "theme.slint";
+import { CurrentData, HourData, DayData, AlertData } from "types.slint";
+import { NowPage } from "pages/now.slint";
+import { HourlyPage } from "pages/hourly.slint";
+import { WeekPage } from "pages/week.slint";
+import { DetailsPage } from "pages/details.slint";
+import { AlertsPage } from "pages/alerts.slint";
+
+export { CurrentData, HourData, DayData, AlertData }
+
+export component WeatherApp inherits Window {
+    in property <bool> loading: true;
+    in property <string> loading-status: "Starting...";
+    in property <float> loading-progress: 0;
+
+    in property <CurrentData> current;
+    in property <[HourData]> hours;
+    in property <[DayData]> days;
+    in property <[AlertData]> alerts;
+    in property <image> hourly-chart;
+    in property <image> sun-arc;
+    in property <float> hourly-min;
+    in property <float> hourly-max;
+    in property <float> week-min;
+    in property <float> week-max;
+
+    // Set by Rust: the last refresh failed / data comes from the cache; a refresh is running.
+    in property <bool> offline: false;
+    in property <bool> refreshing: false;
+    // Pages: 0 now, 1 hourly, 2 week, 3 details, 4 alerts (only when there are alerts).
+    in property <int> page: 0;
+    in property <int> page-count: 4;
+
+    width: 320px;
+    height: 172px;
+    background: @linear-gradient(180deg, Theme.bg-top 0%, Theme.bg-bottom 100%);
+    default-font-family: Theme.font;
+
+    // Icon glyphs are chosen at runtime and Slint only embeds glyphs that appear as literals:
+    // list every Weather Icons code point we use, at each size.
+    Text { visible: false; font-family: Theme.icon-font; font-size: 16px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+    Text { visible: false; font-family: Theme.icon-font; font-size: 40px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+
+    // ── Loading ──────────────────────────────────────────────────
+    if loading: Rectangle {
+        Text {
+            y: 22px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "\u{f00d}";
+            font-family: Theme.icon-font;
+            font-size: 40px;
+            color: Theme.warm;
+        }
+        Text {
+            y: 76px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "WeatherTrack";
+            font-family: Theme.font;
+            font-size: 18px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+        Text {
+            y: 102px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: root.loading-status;
+            font-family: Theme.font;
+            font-size: 10px;
+            color: Theme.muted;
+        }
+        Rectangle {
+            x: (parent.width - 180px) / 2;
+            y: 124px;
+            width: 180px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: Theme.track;
+            Rectangle {
+                x: 0px;
+                y: 0px;
+                width: parent.width * Math.min(1, Math.max(0.04, root.loading-progress));
+                height: parent.height;
+                border-radius: 2.5px;
+                background: Theme.accent;
+            }
+        }
+    }
+
+    // ── Top bar ──────────────────────────────────────────────────
+    if !loading: Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: 22px;
+        Text {
+            x: 8px;
+            y: 3px;
+            text: root.current.location;
+            font-family: Theme.font;
+            font-size: 14px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+        Text {
+            x: parent.width - 8px - self.width;
+            y: 6px;
+            text: root.refreshing ? "Refreshing..." : root.offline ? "Offline · " + root.current.updated : root.current.updated;
+            font-family: Theme.font;
+            font-size: 10px;
+            font-weight: root.offline ? 700 : 400;
+            color: root.offline ? Theme.warm : Theme.faint;
+        }
+    }
+
+    // ── Pages ────────────────────────────────────────────────────
+    if !loading: Rectangle {
+        x: 0px;
+        y: 22px;
+        width: parent.width;
+        height: 134px;
+        if root.page == 0: NowPage { cur: root.current; hours: root.hours; }
+        if root.page == 1: HourlyPage { hours: root.hours; chart: root.hourly-chart; t-min: root.hourly-min; t-max: root.hourly-max; }
+        if root.page == 2: WeekPage { days: root.days; week-min: root.week-min; week-max: root.week-max; }
+        if root.page == 3: DetailsPage { cur: root.current; }
+        if root.page == 4: AlertsPage { alerts: root.alerts; }
+    }
+
+    // ── Page dots ────────────────────────────────────────────────
+    if !loading: Rectangle {
+        x: 0px;
+        y: 158px;
+        width: parent.width;
+        height: 14px;
+        for i in root.page-count: Rectangle {
+            x: (parent.width - root.page-count * 12px) / 2 + i * 12px + 3px;
+            y: 4px;
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: i == root.page ? (i == 4 ? Theme.warm : Theme.accent) : Theme.faint;
+        }
+        Text {
+            x: parent.width - 8px - self.width;
+            y: 2px;
+            text: "BOOT: next";
+            font-family: Theme.font;
+            font-size: 8px;
+            color: Theme.faint;
+        }
+    }
+}

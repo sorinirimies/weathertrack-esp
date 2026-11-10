@@ -2,6 +2,8 @@
 //! WeatherTrack GUI — entry point.
 //! Hardware init, Slint platform, then Elm event loop.
 
+mod bridge_config;
+#[path = "../../weathertrack-view/slint/bridge.rs"]
 mod bridge;
 mod platform;
 
@@ -30,6 +32,23 @@ use mipidsi::{
 use ws2812_esp32_rmt_driver::driver::Ws2812Esp32RmtDriver;
 
 slint::include_modules!();
+
+/// Free heap and the largest free block, for the log (the C6 has no PSRAM).
+fn heap_note(what: &str) {
+    // SAFETY: plain ESP-IDF heap statistics getters.
+    let (free, largest) = unsafe {
+        (
+            esp_idf_svc::sys::esp_get_free_heap_size(),
+            esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT),
+        )
+    };
+    log::info!("heap {what}: free {free}, largest block {largest}");
+}
+
+/// Now, hourly, week, details — plus alerts while there are any.
+fn page_count(model: &app::Model) -> i32 {
+    4 + i32::from(!model.alerts.is_empty())
+}
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASS: &str = env!("WIFI_PASS");
@@ -112,9 +131,13 @@ fn main() {
 
     let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
     let mut cfg = nvs::load_config(&nvs_store, &DEFAULTS);
-    if !cfg.from_nvs {
-        nvs::save_config(&mut nvs_store, &cfg);
+    // config.toml (baked in at build time) wins over stale values left in NVS by an older flash.
+    if !WIFI_SSID.is_empty() {
+        cfg.ssid = WIFI_SSID.to_string();
+        cfg.pass = WIFI_PASS.to_string();
     }
+    log::info!("WiFi network: '{}' (from_nvs={})", cfg.ssid, cfg.from_nvs);
+    nvs::save_config(&mut nvs_store, &cfg);
 
     // ── WiFi ────────────────────────────────────────────────────────
     slint_app.set_loading_status("Connecting WiFi...".into());
@@ -145,6 +168,7 @@ fn main() {
     platform::render(&window, &mut display);
 
     let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
+    let mut offline = false;
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
         Ok(f) => {
@@ -152,6 +176,7 @@ fn main() {
             led::set_led(0, 255, 0, &mut led_drv);
         }
         Err(e) => {
+            offline = true;
             app::update(&mut model, app::Msg::WeatherError(e.to_string()));
             slint_app.set_loading_status(format!("Error: {e}").into());
             window.request_redraw();
@@ -162,7 +187,13 @@ fn main() {
     }
 
     // ── Show weather ────────────────────────────────────────────────
+    heap_note("before sync");
     bridge::sync_all(&slint_app, &model);
+    heap_note("after sync");
+    slint_app.set_offline(offline);
+    let mut page: i32 = 0;
+    slint_app.set_page_count(page_count(&model));
+    slint_app.set_page(page);
     slint_app.set_loading(false);
     window.request_redraw();
     platform::render(&window, &mut display);
@@ -176,8 +207,9 @@ fn main() {
     loop {
         let btn = button.is_low();
         if btn && !btn_prev {
-            app::update(&mut model, app::Msg::NextPage);
-            bridge::sync_all(&slint_app, &model);
+            // BOOT flips to the next page (the alerts page only exists while there are alerts)
+            page = (page + 1) % page_count(&model);
+            slint_app.set_page(page);
         }
         btn_prev = btn;
 
@@ -186,17 +218,28 @@ fn main() {
 
         if ticks.wrapping_sub(last_fetch) >= REFRESH_MS {
             led::set_led(0, 0, 255, &mut led_drv);
+            slint_app.set_refreshing(true);
+            window.request_redraw();
+            platform::render(&window, &mut display);
             match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
                 Ok(f) => {
                     app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
                     bridge::sync_all(&slint_app, &model);
+                    offline = false;
+                    let count = page_count(&model);
+                    slint_app.set_page_count(count);
+                    page = page.min(count - 1);
+                    slint_app.set_page(page);
                     led::set_led(0, 255, 0, &mut led_drv);
                 }
                 Err(e) => {
                     app::update(&mut model, app::Msg::WeatherError(e.to_string()));
+                    offline = true;
                     led::set_led(255, 165, 0, &mut led_drv);
                 }
             }
+            slint_app.set_offline(offline);
+            slint_app.set_refreshing(false);
             last_fetch = ticks;
         }
 

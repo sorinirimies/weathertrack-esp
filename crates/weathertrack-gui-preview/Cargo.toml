@@ -1,0 +1,21 @@
+[package]
+name = "weathertrack-gui-preview"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Host-side renderer: draws the P4 UI with Slint's software renderer into a PNG.
+[dependencies]
+slint = { version = "1.11", default-features = false, features = ["compat-1-2", "renderer-software", "std", "libm"] }
+weathertrack-core = { path = "../weathertrack-core", default-features = false }
+weathertrack-view = { path = "../weathertrack-view" }
+png = "0.17"
+
+[build-dependencies]
+slint-build = "1.11"
+
+[workspace]
+
+[package.metadata.cargo-machete]
+# Used by ../weathertrack-view/slint/bridge.rs, which is included by path (machete does not follow it).
+ignored = ["weathertrack-core"]

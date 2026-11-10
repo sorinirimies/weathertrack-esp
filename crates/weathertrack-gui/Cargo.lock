@@ -5375,19 +5375,18 @@ dependencies = [
 name = "weathertrack-gui"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "embedded-graphics",
  "embuild",
  "esp-idf-hal",
  "esp-idf-svc",
  "log",
  "mipidsi",
- "serde_json",
  "slint",
  "slint-build",
  "toml 0.8.23",
  "weathertrack-core",
  "weathertrack-hal",
+ "weathertrack-view",
  "ws2812-esp32-rmt-driver",
 ]
 
@@ -5402,6 +5401,13 @@ dependencies = [
  "serde_json",
  "weathertrack-core",
  "ws2812-esp32-rmt-driver",
+]
+
+[[package]]
+name = "weathertrack-view"
+version = "0.1.0"
+dependencies = [
+ "weathertrack-core",
 ]
 
 [[package]]

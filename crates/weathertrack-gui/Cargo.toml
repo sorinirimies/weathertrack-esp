@@ -20,6 +20,7 @@ opt-level = "z"
 
 [dependencies]
 weathertrack-core = { path = "../weathertrack-core", default-features = false }
+weathertrack-view = { path = "../weathertrack-view" }
 weathertrack-hal = { path = "../weathertrack-hal" }
 log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["experimental"] }
@@ -41,3 +42,7 @@ slint = { version = "1.11", default-features = false, features = [
 embuild = "0.33"
 slint-build = "1.11"
 toml = "0.8"
+
+[package.metadata.cargo-machete]
+# Used by ../weathertrack-view/slint/bridge.rs, which is included by path (machete does not follow it).
+ignored = ["weathertrack-view"]

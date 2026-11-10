@@ -1,0 +1,88 @@
+import { Theme } from "../theme.slint";
+import { AlertData } from "../types.slint";
+import { Card } from "../card.slint";
+
+// Content area: 320 x 134 — up to two alerts of 64 px, or the all-clear.
+export component AlertsPage inherits Rectangle {
+    in property <[AlertData]> alerts;
+
+    pure function sev-color(level: int) -> color {
+        return level >= 3 ? #ef4444 : level == 2 ? #fb923c : #facc15;
+    }
+
+    if alerts.length == 0: Card {
+        x: 6px;
+        y: 2px;
+        width: 308px;
+        height: 132px;
+        Text {
+            y: 38px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "No active alerts";
+            font-family: Theme.font;
+            font-size: 16px;
+            font-weight: 700;
+            color: Theme.good;
+        }
+        Text {
+            y: 64px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "Conditions are normal for your area.";
+            font-family: Theme.font;
+            font-size: 10px;
+            color: Theme.muted;
+        }
+    }
+
+    for a[i] in alerts: Card {
+        visible: i < 2;
+        clip: true;
+        x: 6px;
+        y: 2px + i * 68px;
+        width: 308px;
+        height: 64px;
+        Rectangle { x: 0px; y: 0px; width: 5px; height: parent.height; background: root.sev-color(a.level); }
+        Text {
+            x: 14px;
+            y: 5px;
+            width: 200px;
+            text: a.event;
+            font-family: Theme.font;
+            font-size: 13px;
+            font-weight: 700;
+            color: Theme.text;
+            overflow: elide;
+        }
+        Text {
+            x: parent.width - 10px - self.width;
+            y: 7px;
+            text: a.severity;
+            font-family: Theme.font;
+            font-size: 10px;
+            font-weight: 700;
+            color: root.sev-color(a.level);
+        }
+        Text {
+            x: 14px;
+            y: 24px;
+            width: parent.width - 24px;
+            height: 26px;
+            text: a.description;
+            wrap: word-wrap;
+            overflow: elide;
+            font-family: Theme.font;
+            font-size: 9px;
+            color: Theme.muted;
+        }
+        Text {
+            x: 14px;
+            y: 51px;
+            text: a.period;
+            font-family: Theme.font;
+            font-size: 8px;
+            color: Theme.faint;
+        }
+    }
+}

@@ -1,0 +1,148 @@
+import { Theme } from "../theme.slint";
+import { CurrentData, HourData } from "../types.slint";
+import { Card, Caption, Meter } from "../card.slint";
+
+// Content area: 320 x 134.
+export component NowPage inherits Rectangle {
+    in property <CurrentData> cur;
+    in property <[HourData]> hours;
+
+    Card {
+        x: 6px;
+        y: 2px;
+        width: 150px;
+        height: 84px;
+
+        Text {
+            x: 10px;
+            y: 6px;
+            text: cur.icon;
+            font-family: Theme.icon-font;
+            font-size: 40px;
+            color: Theme.warm;
+        }
+        Text {
+            x: 58px;
+            y: 0px;
+            text: cur.temperature + "°";
+            font-family: Theme.font;
+            font-size: 46px;
+            font-weight: 700;
+            color: Theme.temp-color(cur.temp-val);
+        }
+        Text {
+            x: 10px;
+            y: 52px;
+            width: parent.width - 20px;
+            text: cur.condition;
+            font-family: Theme.font;
+            font-size: 14px;
+            font-weight: 700;
+            color: Theme.text;
+            overflow: elide;
+        }
+        Text {
+            x: 10px;
+            y: 69px;
+            width: parent.width - 20px;
+            text: "Feels " + cur.feels-like + "° · ↑" + cur.high + "° ↓" + cur.low + "°";
+            font-family: Theme.font;
+            font-size: 10px;
+            color: Theme.muted;
+            overflow: elide;
+        }
+    }
+
+    Card {
+        x: 162px;
+        y: 2px;
+        width: 152px;
+        height: 84px;
+
+        Caption { x: 10px; y: 6px; text: "HUMIDITY"; }
+        Text {
+            x: parent.width - 10px - self.width;
+            y: 3px;
+            text: Math.round(cur.humidity) + "%";
+            font-family: Theme.font;
+            font-size: 13px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+        Meter { x: 10px; y: 21px; width: parent.width - 20px; fraction: cur.humidity / 100; fill: Theme.rain; }
+
+        Caption { x: 10px; y: 32px; text: "WIND"; }
+        Text {
+            x: parent.width - 10px - self.width;
+            y: 29px;
+            text: cur.wind-speed + " km/h " + cur.wind-dir;
+            font-family: Theme.font;
+            font-size: 13px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+        Text {
+            x: 10px;
+            y: 47px;
+            text: "gusts " + cur.gusts;
+            font-family: Theme.font;
+            font-size: 9px;
+            color: Theme.faint;
+        }
+
+        Caption { x: 10px; y: 60px; text: "UV INDEX"; }
+        Text {
+            x: parent.width - 10px - self.width;
+            y: 57px;
+            text: Math.round(cur.uv) + " " + cur.uv-label;
+            font-family: Theme.font;
+            font-size: 13px;
+            font-weight: 700;
+            color: Theme.uv-color(cur.uv);
+        }
+        Meter { x: 10px; y: 75px; width: parent.width - 20px; fraction: cur.uv / 11; fill: Theme.uv-color(cur.uv); }
+    }
+
+    Card {
+        x: 6px;
+        y: 90px;
+        width: 308px;
+        height: 44px;
+
+        for h[i] in root.hours: Rectangle {
+            visible: i < 6;
+            x: 4px + i * 50px;
+            y: 0px;
+            width: 50px;
+            height: 44px;
+            Text {
+                y: 3px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: i == 0 ? "Now" : h.time;
+                font-family: Theme.font;
+                font-size: 9px;
+                color: Theme.muted;
+            }
+            Text {
+                y: 12px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.icon;
+                font-family: Theme.icon-font;
+                font-size: 16px;
+                color: Theme.warm;
+            }
+            Text {
+                y: 30px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.temp + "°";
+                font-family: Theme.font;
+                font-size: 12px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+        }
+    }
+}

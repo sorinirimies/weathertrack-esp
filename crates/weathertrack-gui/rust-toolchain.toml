@@ -1,3 +1,5 @@
 [toolchain]
-channel = "nightly"
+# Pinned: newer nightlies fail to build std for *-esp-espidf (libc `stat` fields).
+# Bump once upstream fixes it.
+channel = "nightly-2026-09-15"
 components = ["rust-src"]

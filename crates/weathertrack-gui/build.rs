@@ -46,7 +46,9 @@ fn main() {
     // ── Slint compilation ───────────────────────────────────────
     let slint_config = slint_build::CompilerConfiguration::new()
         .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer);
-    slint_build::compile_with_config("ui/weather.slint", slint_config).unwrap();
+    slint_build::compile_with_config("ui/app.slint", slint_config).unwrap();
+    println!("cargo:rerun-if-changed=ui");
+    println!("cargo:rerun-if-changed=../weathertrack-view/slint");
 
     embuild::espidf::sysenv::output();
 }

@@ -1,0 +1,84 @@
+import { Theme } from "../theme.slint";
+import { HourData } from "../types.slint";
+import { Card, Caption } from "../card.slint";
+
+// Content area: 320 x 134. Chart geometry must match src/bridge_config.rs (260 x 56).
+export component HourlyPage inherits Rectangle {
+    in property <[HourData]> hours;
+    in property <image> chart;
+    in property <float> t-min;
+    in property <float> t-max;
+
+    Card {
+        x: 6px;
+        y: 2px;
+        width: 308px;
+        height: 132px;
+
+        Caption { x: 12px; y: 6px; text: "NEXT 24 HOURS"; }
+        Text {
+            x: parent.width - 12px - self.width;
+            y: 4px;
+            text: "min " + Math.round(root.t-min) + "°  max " + Math.round(root.t-max) + "°";
+            font-family: Theme.font;
+            font-size: 10px;
+            color: Theme.muted;
+        }
+
+        Image {
+            x: 24px;
+            y: 20px;
+            width: 260px;
+            height: 56px;
+            source: root.chart;
+        }
+
+        for h[i] in root.hours: Rectangle {
+            visible: Math.mod(i, 4) == 0;
+            x: 24px + h.x - 3px;
+            y: 20px + h.y - 3px;
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: Theme.text;
+            border-width: 1px;
+            border-color: Theme.temp-color(h.temp-val);
+        }
+
+        for h[i] in root.hours: Rectangle {
+            visible: Math.mod(i, 4) == 0;
+            x: Math.max(2px, Math.min(24px + h.x - 20px, parent.width - 44px));
+            y: 83px;
+            width: 40px;
+            height: 46px;
+            Text {
+                y: 0px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.time;
+                font-family: Theme.font;
+                font-size: 9px;
+                color: Theme.muted;
+            }
+            Text {
+                y: 11px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.icon;
+                font-family: Theme.icon-font;
+                font-size: 16px;
+                color: Theme.warm;
+            }
+            Text {
+                y: 31px;
+                width: parent.width;
+                horizontal-alignment: center;
+                text: h.temp + "°";
+                font-family: Theme.font;
+                font-size: 11px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+        }
+    }
+}

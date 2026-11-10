@@ -1,0 +1,109 @@
+import { Theme } from "../theme.slint";
+import { DayData } from "../types.slint";
+import { Card } from "../card.slint";
+
+// Content area: 320 x 134 — seven rows of 18 px.
+export component WeekPage inherits Rectangle {
+    in property <[DayData]> days;
+    in property <float> week-min;
+    in property <float> week-max;
+
+    Card {
+        x: 6px;
+        y: 2px;
+        width: 308px;
+        height: 132px;
+
+        for d[i] in root.days: Rectangle {
+            visible: i < 7;
+            x: 0px;
+            y: 3px + i * 18px;
+            width: parent.width;
+            height: 18px;
+
+            Text {
+                x: 10px;
+                width: 38px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: i == 0 ? "Today" : d.weekday;
+                font-family: Theme.font;
+                font-size: 11px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+            Text {
+                x: 50px;
+                width: 20px;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                text: d.icon;
+                font-family: Theme.icon-font;
+                font-size: 16px;
+                color: Theme.warm;
+            }
+            Text {
+                x: 72px;
+                width: 26px;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+                text: d.low + "°";
+                font-family: Theme.font;
+                font-size: 10px;
+                color: Theme.muted;
+            }
+            Rectangle {
+                x: 104px;
+                y: 6px;
+                width: 100px;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.track;
+                Rectangle {
+                    property <float> span: Math.max(1, root.week-max - root.week-min);
+                    y: 0px;
+                    x: parent.width * (d.low-val - root.week-min) / span;
+                    width: Math.max(6px, parent.width * (d.high-val - d.low-val) / span);
+                    height: parent.height;
+                    border-radius: 3px;
+                    background: @linear-gradient(90deg, Theme.temp-color(d.low-val), Theme.temp-color(d.high-val));
+                }
+            }
+            Text {
+                x: 210px;
+                width: 28px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: d.high + "°";
+                font-family: Theme.font;
+                font-size: 11px;
+                font-weight: 700;
+                color: Theme.text;
+            }
+            Text {
+                x: 242px;
+                width: 30px;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+                text: d.rain-pct + "%";
+                font-family: Theme.font;
+                font-size: 10px;
+                color: d.rain-pct >= 50 ? Theme.rain : Theme.faint;
+            }
+            Text {
+                x: 276px;
+                width: 28px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: "UV" + Math.round(d.uv);
+                font-family: Theme.font;
+                font-size: 9px;
+                font-weight: 700;
+                color: Theme.uv-color(d.uv);
+            }
+        }
+    }
+}
