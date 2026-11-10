@@ -19,14 +19,22 @@ pub fn location_from_env() -> Option<Location> {
     })
 }
 
-/// A place baked into the firmware from `config.toml` at build time (`DEFAULT_LAT`,
-/// `DEFAULT_LON`, `DEFAULT_LOCATION`). `None` unless a name and valid coordinates are all given, so
-/// "nothing configured" and "half configured" both fall back to NVS and IP geolocation.
-pub fn baked_location(
+/// A place the user pinned in `config.toml` (`[location] fixed = true` with a name and
+/// coordinates), baked into the firmware at build time as `DEFAULT_LAT`, `DEFAULT_LON`,
+/// `DEFAULT_LOCATION` and `LOCATION_FIXED`.
+///
+/// `None` unless the place is pinned *and* complete and valid: the normal case is that the device
+/// follows its current network location (IP geolocation) and the configured place is only a
+/// fallback for when that lookup fails.
+pub fn pinned_location(
     lat: Option<&str>,
     lon: Option<&str>,
     name: Option<&str>,
+    fixed: Option<&str>,
 ) -> Option<(f64, f64, String)> {
+    if !matches!(fixed?.trim(), "1" | "true") {
+        return None;
+    }
     let lat = lat?
         .trim()
         .parse::<f64>()
@@ -100,32 +108,55 @@ mod tests {
     }
 
     #[test]
-    fn a_baked_location_needs_name_and_valid_coordinates() {
+    fn a_pinned_location_needs_the_flag_a_name_and_valid_coordinates() {
+        let t = Some("true");
         assert_eq!(
-            baked_location(Some("46.77"), Some("23.60"), Some("Cluj-Napoca")),
+            pinned_location(Some("46.77"), Some("23.60"), Some("Cluj-Napoca"), t),
             Some((46.77, 23.6, "Cluj-Napoca".to_string()))
         );
         assert_eq!(
-            baked_location(Some(" 1.5 "), Some("-2"), Some("  Spot ")),
+            pinned_location(Some(" 1.5 "), Some("-2"), Some("  Spot "), Some("1")),
             Some((1.5, -2.0, "Spot".to_string())),
             "values are trimmed"
         );
-        assert_eq!(baked_location(None, Some("23.6"), Some("X")), None);
-        assert_eq!(baked_location(Some("46.7"), None, Some("X")), None);
-        assert_eq!(baked_location(Some("46.7"), Some("23.6"), None), None);
+        // the normal case: not pinned, the device follows its network location
         assert_eq!(
-            baked_location(Some("46.7"), Some("23.6"), Some("  ")),
+            pinned_location(Some("46.77"), Some("23.6"), Some("Cluj-Napoca"), None),
+            None
+        );
+        assert_eq!(
+            pinned_location(
+                Some("46.77"),
+                Some("23.6"),
+                Some("Cluj-Napoca"),
+                Some("false")
+            ),
+            None
+        );
+        assert_eq!(
+            pinned_location(Some("46.77"), Some("23.6"), Some("Cluj-Napoca"), Some("")),
+            None
+        );
+        // pinned but incomplete or invalid: ignored, never a half place
+        assert_eq!(pinned_location(None, Some("23.6"), Some("X"), t), None);
+        assert_eq!(pinned_location(Some("46.7"), None, Some("X"), t), None);
+        assert_eq!(pinned_location(Some("46.7"), Some("23.6"), None, t), None);
+        assert_eq!(
+            pinned_location(Some("46.7"), Some("23.6"), Some("  "), t),
             None,
             "an empty name is not a place"
         );
-        assert_eq!(baked_location(Some("abc"), Some("23.6"), Some("X")), None);
         assert_eq!(
-            baked_location(Some("91"), Some("23.6"), Some("X")),
+            pinned_location(Some("abc"), Some("23.6"), Some("X"), t),
+            None
+        );
+        assert_eq!(
+            pinned_location(Some("91"), Some("23.6"), Some("X"), t),
             None,
             "latitude out of range"
         );
         assert_eq!(
-            baked_location(Some("46.7"), Some("181"), Some("X")),
+            pinned_location(Some("46.7"), Some("181"), Some("X"), t),
             None,
             "longitude out of range"
         );

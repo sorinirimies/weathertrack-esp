@@ -132,7 +132,7 @@ The core crate has no ESP32 dependencies and is the only workspace member. The f
    cd esp32-c6-weathertrack
    ```
 
-2. Copy `config.toml.example` to `config.toml` (git-ignored) and set your WiFi and location. It is baked into the firmware at build time.
+2. Copy `config.toml.example` to `config.toml` (git-ignored) and set your WiFi. It is baked into the firmware at build time. **The weather follows where the device is**: on every boot its location is looked up from the network (IP geolocation, city level). The `[location]` place in `config.toml` is only the fallback if that lookup fails; set `fixed = true` there to pin it instead.
 
 3. Build and flash (release mode recommended for performance):
 

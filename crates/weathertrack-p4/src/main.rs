@@ -118,10 +118,16 @@ fn run() -> anyhow::Result<()> {
     let defaults = defaults();
     let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true)?;
     let mut cfg = store::load_config(&nvs_store, &defaults);
-    let configured_location = CONFIG_LOCATION.is_some();
-    if configured_location {
-        (cfg.lat, cfg.lon, cfg.location) =
-            (defaults.lat, defaults.lon, defaults.location.to_string());
+    // The place follows the network (IP geolocation, every boot); `config.toml` pins one only with
+    // `[location] fixed = true`. Without a lookup the last known place (NVS) or the config one is used.
+    let pinned = weathertrack_core::location::pinned_location(
+        option_env!("DEFAULT_LAT"),
+        option_env!("DEFAULT_LON"),
+        option_env!("DEFAULT_LOCATION"),
+        option_env!("LOCATION_FIXED"),
+    );
+    if let Some((lat, lon, name)) = &pinned {
+        (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
     }
     if !WIFI_SSID.is_empty() {
         (cfg.ssid, cfg.pass) = (WIFI_SSID.to_string(), WIFI_PASS.to_string());
@@ -169,10 +175,8 @@ fn run() -> anyhow::Result<()> {
         }
     }
 
-    // ── Location: only guess from the IP when nothing was configured ─
-    let is_default = (cfg.lat - defaults.lat).abs() < 0.01 && (cfg.lon - defaults.lon).abs() < 0.01;
-    if !configured_location && (!cfg.from_nvs || is_default) && wifi.is_connected().unwrap_or(false)
-    {
+    // ── Location: follow the network unless the place is pinned ─────
+    if pinned.is_none() && wifi.is_connected().unwrap_or(false) {
         status(&mut ui, "Detecting location…", 0.55);
         if let Ok(loc) = net::fetch_ip_location() {
             cfg.lat = loc.latitude;

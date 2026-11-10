@@ -9,8 +9,10 @@ ssid = "YOUR_WIFI_SSID"
 password = "YOUR_WIFI_PASSWORD"
 
 [location]
-# Leave as-is for automatic IP-based geolocation,
-# or set your coordinates manually.
+# By default the weather follows where the device is: its location is looked up from the network
+# (IP geolocation) on every boot. The place below is only the fallback when that lookup fails.
 latitude = 46.77
 longitude = 23.60
 name = "Cluj-Napoca"
+# Set to true to always use the place above and skip the lookup.
+fixed = false

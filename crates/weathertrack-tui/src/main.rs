@@ -113,10 +113,13 @@ fn main() {
         cfg.ssid = WIFI_SSID.to_string();
         cfg.pass = WIFI_PASS.to_string();
     }
-    let configured = weathertrack_core::location::baked_location(
+    // The place follows the network (IP geolocation, every boot); `config.toml` pins one only with
+    // `[location] fixed = true`. Without a lookup the last known place (NVS) or the config one is used.
+    let configured = weathertrack_core::location::pinned_location(
         option_env!("DEFAULT_LAT"),
         option_env!("DEFAULT_LON"),
         option_env!("DEFAULT_LOCATION"),
+        option_env!("LOCATION_FIXED"),
     );
     if let Some((lat, lon, name)) = &configured {
         (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
@@ -173,8 +176,7 @@ fn main() {
     );
 
     // ── Geolocation ─────────────────────────────────────────────────
-    let is_default = (cfg.lat - DEFAULTS.lat).abs() < 0.01 && (cfg.lon - DEFAULTS.lon).abs() < 0.01;
-    if configured.is_none() && (!cfg.from_nvs || is_default) {
+    if configured.is_none() {
         splash::draw_status(&mut display, 3, "Detecting location...", Rgb565::WHITE);
         if let Ok(loc) = net::fetch_ip_location() {
             cfg.lat = loc.latitude;

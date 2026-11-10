@@ -26,6 +26,10 @@ fn main() {
             if let Some(name) = loc.get("name").and_then(|v| v.as_str()) {
                 println!("cargo:rustc-env=DEFAULT_LOCATION={name}");
             }
+            // `fixed = true` pins the place; otherwise it is only the fallback for a failed lookup.
+            if loc.get("fixed").and_then(|v| v.as_bool()) == Some(true) {
+                println!("cargo:rustc-env=LOCATION_FIXED=true");
+            }
         }
         println!("cargo:rerun-if-changed={}", config_path.display());
     } else {
