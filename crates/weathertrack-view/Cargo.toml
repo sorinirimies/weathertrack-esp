@@ -1,0 +1,17 @@
+[package]
+name = "weathertrack-view"
+description = "Presentation layer shared by every WeatherTrack UI: formatted values, hourly window, chart geometry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+weathertrack-core = { workspace = true }
+
+[lints]
+workspace = true

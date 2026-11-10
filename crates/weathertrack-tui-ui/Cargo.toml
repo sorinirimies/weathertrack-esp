@@ -1,0 +1,18 @@
+[package]
+name = "weathertrack-tui-ui"
+description = "Responsive ratatui weather UI shared by the C6 (compact) and P4 (wide) terminals"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+ratatui = { version = "0.30", default-features = false }
+weathertrack-view = { workspace = true }
+
+[lints]
+workspace = true

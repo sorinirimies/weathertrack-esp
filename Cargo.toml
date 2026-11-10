@@ -2,13 +2,15 @@
 resolver = "3"
 # Only host-testable code is a workspace member. The firmware crates (tui, gui, hal,
 # p4) need the ESP toolchain and their own .cargo/config.toml, so they build on their own.
-members = ["crates/weathertrack-core"]
+members = ["crates/weathertrack-core", "crates/weathertrack-view", "crates/weathertrack-tui-ui"]
 exclude = [
     "crates/weathertrack-tui",
     "crates/weathertrack-gui",
     "crates/weathertrack-hal",
     "crates/weathertrack-p4",
     "crates/weathertrack-p4-preview",
+    "crates/weathertrack-tui-preview",
+    "crates/weathertrack-gui-preview",
 ]
 
 # One version for every crate; `just bump X.Y.Z` edits it (and EXTRA_MANIFESTS).
@@ -23,6 +25,7 @@ homepage = "https://github.com/sorinirimies/esp32-c6-weathertrack"
 
 [workspace.dependencies]
 weathertrack-core = { path = "crates/weathertrack-core", version = "0.1.0" }
+weathertrack-view = { path = "crates/weathertrack-view", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
