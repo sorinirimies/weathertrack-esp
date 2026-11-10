@@ -93,6 +93,10 @@ preview-tui:
 preview-themes:
     cd crates/weathertrack-tui-preview; with-env {THEMES: "1"} { cargo run --release -- ../../target/tui-ui }
 
+# Run the web app (Topcoat): weather for any place, one place for all your devices, kept in sync
+web *args:
+    cd crates/weathertrack-web; cargo run --release -- {{ args }}
+
 # Write the device's web pages with sample data to target/site/ (open weather.html in a browser)
 preview-web:
     cargo run -q -p weathertrack-view --example site -- target/site
@@ -169,11 +173,11 @@ check-all: fmt
 
 # Security: known vulnerabilities (cargo install cargo-audit)
 audit:
-    cargo audit
+    nu scripts/ci/security.nu audit
 
 # Security: licenses, advisories, bans, sources (cargo install cargo-deny)
 deny:
-    cargo deny check
+    nu scripts/ci/security.nu deny
 
 # Dependencies nothing uses (cargo install cargo-machete; the gate runs it too)
 unused-deps:

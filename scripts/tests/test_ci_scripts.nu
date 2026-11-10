@@ -7,6 +7,7 @@ use runner.nu *
 use ../ci/deps_update.nu [present commit_message series lock_versions downgrades pins pins_changed next_patch upgrade_message]
 use ../ci/publish_crate.nu [already_published package_args]
 use ../ci/apt.nu [commands]
+use ../ci/security.nu [audit_commands deny_commands EXTRA_WORKSPACES]
 use ../ci/gitea_release.nu [release_payload]
 use ../ci/auto_merge.nu [decide checks_green sweep_action]
 use ../ci/actions_update.nu [uses major_of bump PINNED]
@@ -194,3 +195,14 @@ def "test deps_update: a crate kept at two versions is no downgrade" [] {
 }
 
 def main [] { run-tests }
+
+def "test security: the web app is audited and denied like the workspace" [] {
+    assert equal ($EXTRA_WORKSPACES) ["crates/weathertrack-web"]
+    assert equal (audit_commands | first) [cargo audit]
+    assert equal (audit_commands | last) [cargo audit -f "crates/weathertrack-web/Cargo.lock"]
+    assert equal (deny_commands | last) [cargo deny --manifest-path "crates/weathertrack-web/Cargo.toml" check]
+    for w in $EXTRA_WORKSPACES {
+        assert ($"($w)/Cargo.lock" | path exists) $"($w) has a committed lockfile"
+        assert ($"($w)/Cargo.toml" | path exists) $"($w) has a manifest"
+    }
+}

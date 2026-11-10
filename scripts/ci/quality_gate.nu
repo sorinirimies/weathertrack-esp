@@ -7,10 +7,11 @@
 #   1. cargo fmt --check
 #   2. cargo clippy (workspace, all targets, -D warnings)
 #   3. cargo test --workspace
-#   4. cargo doc with warnings as errors (broken intra-doc links fail docs.rs)
-#   5. versions agree (Cargo.toml == EXTRA_MANIFESTS)
-#   6. no unused dependencies (cargo machete, installed when missing)
-#   7. nushell script tests
+#   4. the Topcoat web app (crates/weathertrack-web, its own workspace): fmt, clippy, tests
+#   5. cargo doc with warnings as errors (broken intra-doc links fail docs.rs)
+#   6. versions agree (Cargo.toml == EXTRA_MANIFESTS)
+#   7. no unused dependencies (cargo machete, installed when missing)
+#   8. nushell script tests
 # Project-specific steps (a wasm build, a web bundle, …) go in as extra run_step
 # calls — one place, so every caller gets them.
 #
@@ -54,6 +55,13 @@ def main [--skip-fmt, --skip-test, --skip-nu] {
             }) and $ok
         }
     }
+    # The Topcoat web app is its own workspace (it needs Rust 1.98+, the rest builds with 1.90).
+    $ok = (run_step "weathertrack-web (fmt, clippy, tests)" {
+        cd crates/weathertrack-web
+        cargo fmt -- --check
+        cargo clippy --all-targets -- -D warnings
+        if not $skip_test { cargo test }
+    }) and $ok
     $ok = (run_step "cargo doc (warnings are errors)" {
         with-env { RUSTDOCFLAGS: "-D warnings" } { cargo doc --no-deps --all-features --quiet }
     }) and $ok

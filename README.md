@@ -63,7 +63,7 @@ Every board also serves a small website on its WiFi address (shown on the Place 
 - `/place` change the place (see below)
 - `/api/weather.json` the same data as JSON, for scripts and other apps
 
-It is server-rendered HTML from plain functions in `weathertrack-view` (no JavaScript, no framework, about 14 KB per page), so it is unit-tested and fuzzed on the host and light enough for the ESP32-C6. A Topcoat app would not fit there (it needs tokio and a full HTTP stack); a PC-side companion built on Topcoat could reuse the same view model. `just preview-web` writes the pages with sample data to `target/site/`. The pages have no login: anyone on your WiFi can open them and change the place.
+It is server-rendered HTML from plain functions in `weathertrack-view` (no JavaScript, no framework, about 14 KB per page), so it is unit-tested and fuzzed on the host and light enough for the ESP32-C6. A Topcoat app would not fit there (it needs tokio and a full HTTP stack), so the PC-side [web app](#the-web-app-topcoat) is where Topcoat lives. `just preview-web` writes the pages with sample data to `target/site/`. The pages have no login: anyone on your WiFi can open them and change the place.
 
 ### Choosing the place
 
@@ -78,6 +78,30 @@ Order of precedence: a place pinned in `config.toml` (`[location] fixed = true`)
 | P4 · Place (Slint) | C6 · Place (Slint) | C6 · Place (terminal) |
 |---|---|---|
 | ![P4 place](docs/screenshots/p4-slint-place.png) | ![C6 place](docs/screenshots/c6-slint-place.png) | ![C6 TUI place](docs/screenshots/c6-tui-place.png) |
+
+### The web app (Topcoat)
+
+`weathertrack-web` is a companion for your PC, built with [Topcoat](https://github.com/tokio-rs/topcoat) (server-rendered Rust). It shows the same dashboard as the devices for any place, and it keeps **one place for all your boards**:
+
+```
+just web -d 192.168.3.210 -d 192.168.3.211
+```
+
+| Place | Devices |
+|---|---|
+| ![web app place](docs/screenshots/webapp-place.png) | ![web app devices](docs/screenshots/webapp-devices.png) |
+
+- **Weather**: the full dashboard (it renders the very same `weathertrack-view` code as the devices, so they always look alike).
+- **Place**: search a city, or go back to your network location.
+- **Devices**: add boards by address, see what each shows and whether it matches. **Keep my devices on this place** turns the sync on.
+
+How the sync works (every 30 s, and right after you choose): the web app reads each device's `/api/weather.json` and decides with a pure, tested planner (`weathertrack_core::sync`):
+
+1. A city chosen on the web is sent to every reachable device (`POST /set`, or `/auto` for the network location).
+2. A city chosen on a device's own page is adopted by the web app and sent to the other devices (the last change wins).
+3. A device with a place pinned in `config.toml` is left alone; one that is off is skipped and caught up when it returns.
+
+Settings (devices, chosen place, sync) are kept in the user's config directory (`weathertrack/web.json`). It listens on `127.0.0.1:3030` only by default and has no login, so keep it that way unless you trust your network. It needs Rust 1.98 (Topcoat), so it is its own workspace: the gate checks it and `cargo deny` / `cargo audit` cover it, but the 1.90 MSRV job does not build it.
 
 ### Themes
 
@@ -219,6 +243,7 @@ esp32-c6-weathertrack/
 │   ├── weathertrack-view/      # Presentation layer: formatted values, chart geometry, sample data
 │   │   └── slint/              # Slint data types + bridge shared by the two Slint UIs
 │   ├── weathertrack-tui-ui/    # Responsive ratatui UI (compact C6 / wide P4)
+│   ├── weathertrack-web/       # PC web app (Topcoat): dashboard, city search, one place for all devices
 │   ├── weathertrack-hal/       # ESP32-C6 hardware helpers
 │   ├── weathertrack-tui/       # C6 firmware: ratatui UI on the 172x320 LCD
 │   ├── weathertrack-gui/       # C6 firmware: Slint UI on the 172x320 LCD
