@@ -46,7 +46,8 @@ fn temp_color(t: f32) -> &'static str {
     }
 }
 
-const CSS: &str = "\
+/// Styles of the dashboard body (on top of `weathertrack_core::web::BASE_CSS`).
+pub const DASHBOARD_CSS: &str = "\
 .hero{display:grid;grid-template-columns:auto 1fr;gap:1rem 2rem;align-items:center}\
 .hero .ico{font-size:6rem;line-height:1}.hero .t{font-size:5.5rem;font-weight:700;line-height:1}\
 .hero .c{font-size:1.6rem;font-weight:700;margin-top:.3rem}.hero .meta{color:var(--muted);margin-top:.3rem}\
@@ -63,17 +64,20 @@ svg{width:100%;height:auto;display:block}.cb{overflow-x:auto}.cb svg{min-width:3
 .foot{color:var(--faint);font-size:.85rem;margin:1.5rem 0}.foot a{color:var(--accent)}\
 @media(max-width:34rem){.hero{grid-template-columns:1fr}.hero .t{font-size:4rem}.hero .ico{font-size:4rem}.day{grid-template-columns:3.4rem 1.6rem 2.4rem 1fr 2.4rem 3rem}.day .chip{display:none}}";
 
-/// The whole dashboard page. Refreshes itself every minute.
-pub fn dashboard(vm: &ViewModel) -> String {
-    let refresh = if vm.current.is_some() { 60 } else { 5 };
-    let head = format!("<meta http-equiv=refresh content={refresh}>");
+/// Seconds after which the dashboard should reload itself.
+pub fn refresh_seconds(vm: &ViewModel) -> u32 {
+    if vm.current.is_some() { 60 } else { 5 }
+}
+
+/// The dashboard without the page around it (everything escaped), for pages that bring their own
+/// shell, like the Topcoat web app.
+pub fn dashboard_body(vm: &ViewModel) -> String {
     let Some(c) = &vm.current else {
-        let body = format!(
+        return format!(
             "<div class=card><h2>{}</h2><p class=m>Waiting for the first forecast...</p></div>{}",
             esc(&vm.place.name),
             foot(vm)
         );
-        return page_shell("WeatherTrack", Nav::Weather, CSS, &head, &body);
     };
     let mut b = String::with_capacity(16 * 1024);
     b.push_str(&hero(vm, c));
@@ -92,12 +96,18 @@ pub fn dashboard(vm: &ViewModel) -> String {
     }
     b.push_str("</div>");
     b.push_str(&foot(vm));
+    b
+}
+
+/// The whole dashboard page. Refreshes itself every minute.
+pub fn dashboard(vm: &ViewModel) -> String {
+    let head = format!("<meta http-equiv=refresh content={}>", refresh_seconds(vm));
     page_shell(
         &format!("{} - WeatherTrack", vm.place.name),
         Nav::Weather,
-        CSS,
+        DASHBOARD_CSS,
         &head,
-        &b,
+        &dashboard_body(vm),
     )
 }
 

@@ -107,6 +107,10 @@ pub struct AlertView {
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct PlaceView {
     pub name: String,
+    pub lat: f64,
+    pub lon: f64,
+    /// "pinned", "searched", "network" or "last-known" (see `PlaceSource::key`).
+    pub kind: String,
     /// "49.323, 9.104".
     pub coordinates: String,
     /// "from your network", "chosen by search", ...
@@ -138,6 +142,9 @@ impl ViewModel {
             location: model.location.clone(),
             place: PlaceView {
                 name: model.location.clone(),
+                lat: model.lat,
+                lon: model.lon,
+                kind: model.place_source.key().to_string(),
                 coordinates: format!("{:.3}, {:.3}", model.lat, model.lon),
                 source: model.place_source.label().to_string(),
                 url: model.config_url.clone().unwrap_or_default(),
@@ -459,6 +466,10 @@ mod tests {
         assert_eq!(vm.place.name, "Cluj-Napoca");
         assert_eq!(vm.place.coordinates, "46.770, 23.600");
         assert_eq!(vm.place.source, "chosen by search");
+        assert_eq!(
+            (vm.place.lat, vm.place.lon, vm.place.kind.as_str()),
+            (46.77, 23.6, "searched")
+        );
         assert_eq!(vm.place.url, "http://192.168.3.210/");
         let fresh = Model::new("X", 1.0, 2.0);
         assert_eq!(

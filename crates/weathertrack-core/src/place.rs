@@ -73,6 +73,30 @@ pub enum PlaceSource {
 }
 
 impl PlaceSource {
+    /// Stable machine-readable name (used in the device's JSON).
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Pinned => "pinned",
+            Self::Searched => "searched",
+            Self::Network => "network",
+            Self::LastKnown => "last-known",
+        }
+    }
+
+    /// The source whose [`label`](Self::label) is `label` (older firmware reports only the label).
+    pub fn from_label(label: &str) -> Option<Self> {
+        [Self::Pinned, Self::Searched, Self::Network, Self::LastKnown]
+            .into_iter()
+            .find(|s| s.label() == label)
+    }
+
+    /// Inverse of [`key`](Self::key).
+    pub fn from_key(key: &str) -> Option<Self> {
+        [Self::Pinned, Self::Searched, Self::Network, Self::LastKnown]
+            .into_iter()
+            .find(|s| s.key() == key)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Pinned => "pinned in config.toml",
@@ -194,6 +218,24 @@ mod tests {
             (last, PlaceSource::LastKnown)
         );
         assert_eq!(pick(None, &auto, None, None), (def, PlaceSource::LastKnown));
+    }
+
+    #[test]
+    fn source_keys_round_trip() {
+        for s in [
+            PlaceSource::Pinned,
+            PlaceSource::Searched,
+            PlaceSource::Network,
+            PlaceSource::LastKnown,
+        ] {
+            assert_eq!(PlaceSource::from_key(s.key()), Some(s));
+        }
+        assert_eq!(PlaceSource::from_key("nope"), None);
+        assert_eq!(
+            PlaceSource::from_label("chosen by search"),
+            Some(PlaceSource::Searched)
+        );
+        assert_eq!(PlaceSource::from_label("?"), None);
     }
 
     #[test]

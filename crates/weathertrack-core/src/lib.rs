@@ -11,6 +11,7 @@ pub mod geocode;
 pub mod location;
 pub mod openmeteo;
 pub mod place;
+pub mod sync;
 pub mod types;
 pub mod web;
 pub mod wmo;
