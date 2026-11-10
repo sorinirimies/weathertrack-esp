@@ -2,8 +2,18 @@
 //! (cargo features `slint-ui` and `tui`).
 
 use weathertrack_core::app::Model;
-use weathertrack_core::place::PlaceChoice;
+use weathertrack_core::place::{Place, PlaceChoice};
+use weathertrack_core::saved::SavedPlaces;
 use weathertrack_core::Location;
+
+/// A change of the saved places made on the screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SavedEdit {
+    /// Add the place in use.
+    SaveCurrent,
+    /// Remove the place at this index.
+    Forget(usize),
+}
 
 pub trait Ui {
     /// Show the boot / progress screen.
@@ -28,6 +38,13 @@ pub trait Ui {
     fn set_search_results(&mut self, _found: &[Location], _status: &str) {}
     /// The place the user tapped on the screen (a search result or "Use network"), if they did.
     fn take_place_choice(&mut self) -> Option<PlaceChoice> {
+        None
+    }
+    /// Show the list of saved places; `current` is the place in use (highlighted, and tells whether
+    /// "Save this place" still makes sense).
+    fn set_saved(&mut self, _saved: &SavedPlaces, _current: &Place) {}
+    /// A change of the list made on the screen since the last call, if any.
+    fn take_saved_edit(&mut self) -> Option<SavedEdit> {
         None
     }
 }

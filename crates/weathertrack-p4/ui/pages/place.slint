@@ -6,10 +6,12 @@ import { Caption } from "../components/card.slint";
 component Key inherits Rectangle {
     in property <string> label;
     in property <bool> accent: false;
+    in property <bool> enabled: true;
     callback tapped();
 
     border-radius: 12px;
-    background: touch.pressed ? Theme.accent : accent ? Theme.card-hi : Theme.card;
+    opacity: root.enabled ? 1.0 : 0.45;
+    background: touch.pressed && root.enabled ? Theme.accent : accent ? Theme.card-hi : Theme.card;
     border-width: 1px;
     border-color: accent ? Theme.accent.with-alpha(0.6) : Theme.card-border;
     Text {
@@ -19,23 +21,32 @@ component Key inherits Rectangle {
         font-weight: 700;
         color: touch.pressed ? Theme.bg-top : accent ? Theme.accent : Theme.text;
     }
-    touch := TouchArea { clicked => { root.tapped(); } }
+    touch := TouchArea { enabled: root.enabled; clicked => { root.tapped(); } }
 }
 
-// Content area: 1024 x 464. Search a city with the on-screen keyboard, or use the network location.
-// The place in use is shown until there are results.
+// Content area: 1024 x 464. Two modes:
+//  * list: the place in use, the saved places (tap one to show it, x to remove it), and the
+//    buttons to save the place in use, search a city or use the network location;
+//  * search: a keyboard and the cities found.
 export component PlacePage inherits Rectangle {
     in property <PlaceData> place;
     in property <[PlaceResult]> results;
     in property <string> status;
+    in property <string> query;
+    in property <[PlaceResult]> saved;
+    in property <int> selected: -1;       // index in `saved` of the place in use
+    in property <bool> can-save: true;    // the place in use is not in the list and there is room
     callback search(string);
     callback choose(int);
     callback use-network();
-
-    in property <string> query;
     callback key(string);
     callback backspace();
     callback clear();
+    callback save-current();
+    callback forget(int);
+    callback choose-saved(int);
+
+    in-out property <bool> searching: false;
     property <length> kw: 84px;   // key width
     property <length> kh: 54px;   // key height
     property <length> kg: 6px;    // gap
@@ -43,156 +54,206 @@ export component PlacePage inherits Rectangle {
     property <[string]> row2: ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä"];
     property <[string]> row3: ["y", "x", "c", "v", "b", "n", "m", "ß", "-", "'"];
 
-    // ── Search field and the network button ──
-    Rectangle {
-        x: 20px;
-        y: 6px;
-        width: 760px;
-        height: 56px;
-        border-radius: 14px;
-        background: Theme.bg-top;
-        border-width: 2px;
-        border-color: Theme.accent;
-        Text {
-            x: 18px;
-            width: parent.width - 36px;
-            horizontal-alignment: left;
-            text: root.query == "" ? "Type a city…" : root.query + "|";
-            font-family: Theme.font;
-            font-size: 30px;
-            font-weight: root.query == "" ? 400 : 700;
-            color: root.query == "" ? Theme.faint : Theme.text;
-            overflow: elide;
-        }
-    }
-    Key {
-        x: 790px;
-        y: 6px;
-        width: 214px;
-        height: 56px;
-        label: "Use network";
-        tapped => { root.use-network(); }
-    }
+    // ───────────────────────── list mode ─────────────────────────
+    if !root.searching: Rectangle {
+        width: 1024px;
+        height: 464px;
 
-    // ── Results (or the place in use) ──
-    if root.results.length == 0: Rectangle {
-        x: 20px;
-        y: 72px;
-        width: 984px;
-        height: 138px;
-        Caption { y: 4px; width: parent.width; horizontal-alignment: left; text: root.status == "" ? "SHOWING THE WEATHER FOR" : root.status; }
+        Caption { x: 20px; y: 4px; width: 984px; horizontal-alignment: left; text: root.status == "" ? "SHOWING THE WEATHER FOR" : root.status; }
         Text {
-            y: 28px;
-            width: parent.width;
+            x: 20px;
+            y: 22px;
+            width: 984px;
             text: place.name;
             font-family: Theme.font;
-            font-size: 52px;
+            font-size: 44px;
             font-weight: 700;
             color: Theme.text;
             overflow: elide;
         }
         Text {
-            y: 94px;
-            width: parent.width;
+            x: 20px;
+            y: 72px;
+            width: 984px;
             text: place.source + "  ·  " + place.coordinates + (place.url == "" ? "" : "  ·  " + place.url);
             font-family: Theme.font;
-            font-size: 20px;
+            font-size: 18px;
             color: Theme.muted;
             overflow: elide;
         }
-    }
-    for r[i] in root.results: Rectangle {
-        x: 20px + mod(i, 2) * 496px;
-        y: 72px + floor(i / 2) * 70px;
-        width: 488px;
-        height: 62px;
-        visible: i < 4;
-        border-radius: 14px;
-        background: rt.pressed ? Theme.accent : Theme.card-hi;
-        border-width: 1px;
-        border-color: Theme.accent.with-alpha(0.6);
-        Text {
-            x: 16px;
-            y: 6px;
-            width: parent.width - 32px;
-            text: r.name;
-            font-family: Theme.font;
-            font-size: 26px;
-            font-weight: 700;
-            color: rt.pressed ? Theme.bg-top : Theme.text;
-            overflow: elide;
+
+        Key { x: 20px;  y: 104px; width: 320px; height: 56px; label: "Search city"; accent: true; tapped => { root.searching = true; } }
+        Key {
+            x: 352px;
+            y: 104px;
+            width: 320px;
+            height: 56px;
+            label: root.selected >= 0 ? "Saved" : root.can-save ? "Save this place" : "List full";
+            enabled: root.can-save && root.selected < 0;
+            tapped => { root.save-current(); }
         }
-        Text {
-            x: 16px;
-            y: 36px;
-            width: parent.width - 32px;
-            text: r.detail;
+        Key { x: 684px; y: 104px; width: 320px; height: 56px; label: "Use network"; tapped => { root.use-network(); } }
+
+        Caption { x: 20px; y: 170px; width: 984px; horizontal-alignment: left; text: "MY PLACES"; }
+        if root.saved.length == 0: Text {
+            x: 20px;
+            y: 200px;
+            width: 984px;
+            text: "Nothing saved yet. Search a city, then tap Save this place.";
             font-family: Theme.font;
-            font-size: 17px;
-            color: rt.pressed ? Theme.bg-top : Theme.muted;
-            overflow: elide;
+            font-size: 22px;
+            color: Theme.faint;
         }
-        rt := TouchArea { clicked => { root.choose(i); } }
+        for s[i] in root.saved: Rectangle {
+            x: 20px + mod(i, 2) * 496px;
+            y: 192px + floor(i / 2) * 68px;
+            width: 488px;
+            height: 60px;
+            // name (switch to it)
+            Rectangle {
+                x: 0px;
+                y: 0px;
+                width: 420px;
+                height: 60px;
+                border-radius: 14px;
+                background: st.pressed ? Theme.accent : root.selected == i ? Theme.card-hi : Theme.card;
+                border-width: root.selected == i ? 2px : 1px;
+                border-color: root.selected == i ? Theme.accent : Theme.card-border;
+                Text {
+                    x: 16px;
+                    y: 6px;
+                    width: parent.width - 32px;
+                    text: s.name;
+                    font-family: Theme.font;
+                    font-size: 26px;
+                    font-weight: 700;
+                    color: st.pressed ? Theme.bg-top : Theme.text;
+                    overflow: elide;
+                }
+                Text {
+                    x: 16px;
+                    y: 36px;
+                    width: parent.width - 32px;
+                    text: s.detail;
+                    font-family: Theme.font;
+                    font-size: 16px;
+                    color: st.pressed ? Theme.bg-top : Theme.muted;
+                    overflow: elide;
+                }
+                st := TouchArea { clicked => { root.choose-saved(i); } }
+            }
+            // remove
+            Key {
+                x: 428px;
+                y: 0px;
+                width: 60px;
+                height: 60px;
+                label: "x";
+                accent: true;
+                tapped => { root.forget(i); }
+            }
+        }
     }
 
-    // ── Keyboard (QWERTZ, 11 columns) ──
-    for k[i] in root.row1: Key {
-        x: 20px + i * (kw + kg);
-        y: 222px;
-        width: kw;
-        height: kh;
-        label: k;
-        tapped => { root.key(k); }
-    }
-    for k[i] in root.row2: Key {
-        x: 20px + i * (kw + kg);
-        y: 222px + (kh + kg);
-        width: kw;
-        height: kh;
-        label: k;
-        tapped => { root.key(k); }
-    }
-    for k[i] in root.row3: Key {
-        x: 20px + i * (kw + kg);
-        y: 222px + 2 * (kh + kg);
-        width: kw;
-        height: kh;
-        label: k;
-        tapped => { root.key(k); }
-    }
-    Key {
-        x: 20px + 10 * (kw + kg);
-        y: 222px + 2 * (kh + kg);
-        width: kw;
-        height: kh;
-        label: "Del";
-        accent: true;
-        tapped => { root.backspace(); }
-    }
-    Key {
-        x: 20px;
-        y: 222px + 3 * (kh + kg);
-        width: 2 * kw + kg;
-        height: kh;
-        label: "Clear";
-        accent: true;
-        tapped => { root.clear(); }
-    }
-    Key {
-        x: 20px + 2 * (kw + kg);
-        y: 222px + 3 * (kh + kg);
-        width: 7 * kw + 6 * kg;
-        height: kh;
-        label: "space";
-        tapped => { root.key(" "); }
-    }
-    Key {
-        x: 20px + 9 * (kw + kg);
-        y: 222px + 3 * (kh + kg);
-        width: 2 * kw + kg;
-        height: kh;
-        label: "Search";
-        accent: true;
-        tapped => { root.search(root.query); }
+    // ──────────────────────── search mode ────────────────────────
+    if root.searching: Rectangle {
+        width: 1024px;
+        height: 464px;
+
+        Rectangle {
+            x: 20px;
+            y: 6px;
+            width: 760px;
+            height: 56px;
+            border-radius: 14px;
+            background: Theme.bg-top;
+            border-width: 2px;
+            border-color: Theme.accent;
+            Text {
+                x: 18px;
+                width: parent.width - 36px;
+                horizontal-alignment: left;
+                text: root.query == "" ? "Type a city…" : root.query + "|";
+                font-family: Theme.font;
+                font-size: 30px;
+                font-weight: root.query == "" ? 400 : 700;
+                color: root.query == "" ? Theme.faint : Theme.text;
+                overflow: elide;
+            }
+        }
+        Key { x: 790px; y: 6px; width: 214px; height: 56px; label: "Back"; tapped => { root.searching = false; } }
+
+        if root.results.length == 0: Text {
+            x: 20px;
+            y: 72px;
+            width: 984px;
+            text: root.status == "" ? "Type a city, then tap Search." : root.status;
+            font-family: Theme.font;
+            font-size: 24px;
+            color: Theme.muted;
+        }
+        for r[i] in root.results: Rectangle {
+            x: 20px + mod(i, 2) * 496px;
+            y: 72px + floor(i / 2) * 70px;
+            width: 488px;
+            height: 62px;
+            visible: i < 4;
+            border-radius: 14px;
+            background: rt.pressed ? Theme.accent : Theme.card-hi;
+            border-width: 1px;
+            border-color: Theme.accent.with-alpha(0.6);
+            Text {
+                x: 16px;
+                y: 6px;
+                width: parent.width - 32px;
+                text: r.name;
+                font-family: Theme.font;
+                font-size: 26px;
+                font-weight: 700;
+                color: rt.pressed ? Theme.bg-top : Theme.text;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 36px;
+                width: parent.width - 32px;
+                text: r.detail;
+                font-family: Theme.font;
+                font-size: 17px;
+                color: rt.pressed ? Theme.bg-top : Theme.muted;
+                overflow: elide;
+            }
+            rt := TouchArea { clicked => { root.searching = false; root.choose(i); } }
+        }
+
+        // keyboard (QWERTZ, 11 columns)
+        for k[i] in root.row1: Key {
+            x: 20px + i * (kw + kg);
+            y: 222px;
+            width: kw;
+            height: kh;
+            label: k;
+            tapped => { root.key(k); }
+        }
+        for k[i] in root.row2: Key {
+            x: 20px + i * (kw + kg);
+            y: 222px + (kh + kg);
+            width: kw;
+            height: kh;
+            label: k;
+            tapped => { root.key(k); }
+        }
+        for k[i] in root.row3: Key {
+            x: 20px + i * (kw + kg);
+            y: 222px + 2 * (kh + kg);
+            width: kw;
+            height: kh;
+            label: k;
+            tapped => { root.key(k); }
+        }
+        Key { x: 20px + 10 * (kw + kg); y: 222px + 2 * (kh + kg); width: kw; height: kh; label: "Del"; accent: true; tapped => { root.backspace(); } }
+        Key { x: 20px; y: 222px + 3 * (kh + kg); width: 2 * kw + kg; height: kh; label: "Clear"; accent: true; tapped => { root.clear(); } }
+        Key { x: 20px + 2 * (kw + kg); y: 222px + 3 * (kh + kg); width: 7 * kw + 6 * kg; height: kh; label: "space"; tapped => { root.key(" "); } }
+        Key { x: 20px + 9 * (kw + kg); y: 222px + 3 * (kh + kg); width: 2 * kw + kg; height: kh; label: "Search"; accent: true; tapped => { root.search(root.query); } }
     }
 }

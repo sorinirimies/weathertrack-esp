@@ -73,11 +73,17 @@ By default every board looks up where it is from the network on boot (IP geoloca
 2. Open that address on a phone or computer on the same WiFi, type a city and tap the right result (Open-Meteo geocoding, no key).
 3. The device switches at once and remembers the choice across reboots. **Use my network location** goes back to automatic.
 
+#### My places (a list of favourites)
+
+Keep up to 8 places and switch between them. On any board's website: **Save this place to my list**, tap a name to show it, **x** to remove it. On the P4 screen the Place tab is the list (tap a place to show it, **x** to remove, **Save this place**, **Search city** opens the keyboard). The list is stored in flash, so it survives reboots, and removing a place removes it from flash too. In the web app the same list is on the Place page.
+
+With **Keep my devices on this place** on, the web app and the boards keep the *same list*: a place saved or removed on one side reaches the others (the last change wins), removals included.
+
 Order of precedence: a place pinned in `config.toml` (`[location] fixed = true`) beats your choice, which beats the network lookup, which beats the last known place. The page logic lives in `weathertrack-core` (`place`, `geocode`, `web`: pure, tested and fuzzed); each firmware only serves it.
 
-| P4 · Place (Slint) | C6 · Place (Slint) | C6 · Place (terminal) |
-|---|---|---|
-| ![P4 place](docs/screenshots/p4-slint-place-search.png) | ![C6 place](docs/screenshots/c6-slint-place.png) | ![C6 TUI place](docs/screenshots/c6-tui-place.png) |
+| P4 · Place, my places (Slint) | P4 · Place, search (Slint) | C6 · Place (Slint) | C6 · Place (terminal) |
+|---|---|---|---|
+| ![P4 places](docs/screenshots/p4-slint-place-list.png) | ![P4 search](docs/screenshots/p4-slint-place-search.png) | ![C6 place](docs/screenshots/c6-slint-place.png) | ![C6 TUI place](docs/screenshots/c6-tui-place.png) |
 
 ### The web app (Topcoat)
 

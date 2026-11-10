@@ -346,3 +346,55 @@ async fn health_and_state_are_json() {
         s.body
     );
 }
+
+#[tokio::test]
+async fn saving_listing_and_removing_places_on_the_page() {
+    let (addr, net, state) = start(&[C6]).await;
+    state.set_sync(true);
+    post(
+        addr,
+        "/place/choose",
+        "lat=48.78232&lon=9.17702&name=Stuttgart&apply=1",
+    )
+    .await;
+    let page = get(addr, "/place").await;
+    assert!(
+        page.body.contains("Save this place to my list"),
+        "{}",
+        page.body
+    );
+    let r = post(
+        addr,
+        "/place/save",
+        "lat=48.78232&lon=9.17702&name=Stuttgart&apply=1",
+    )
+    .await;
+    assert_eq!(location(&r), "/place?done=saved-sent");
+    assert_eq!(net.saved_of(C6).len(), 1, "the device has it too");
+    let page = get(addr, "/place").await;
+    assert!(page.body.contains("My places") && page.body.contains("action=\"/place/forget\""));
+    assert!(
+        !page.body.contains("Save this place to my list"),
+        "already in the list"
+    );
+    assert_eq!(
+        location(
+            &post(
+                addr,
+                "/place/save",
+                "lat=48.78232&lon=9.17702&name=Stuttgart&apply=1"
+            )
+            .await
+        ),
+        "/place?done=dup"
+    );
+    assert!(get(addr, "/api/state").await.body.contains("\"saved\":[{"));
+    let r = post(addr, "/place/forget", "i=0&apply=1").await;
+    assert_eq!(location(&r), "/place?done=forgot-sent");
+    assert!(net.saved_of(C6).is_empty(), "removed on the device too");
+    assert!(!get(addr, "/place").await.body.contains("My places"));
+    assert_eq!(
+        location(&post(addr, "/place/forget", "i=5&apply=0").await),
+        "/place?done=invalid"
+    );
+}

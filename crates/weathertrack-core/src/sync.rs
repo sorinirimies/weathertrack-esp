@@ -16,6 +16,7 @@
 use std::collections::BTreeMap;
 
 use crate::place::{Place, PlaceChoice};
+use crate::saved::SavedPlaces;
 
 /// Two places closer than this (degrees of latitude / longitude, about 1 km) are the same.
 const SAME_PLACE_DEG: f64 = 0.01;
@@ -90,6 +91,46 @@ pub fn plan(
             .collect(),
     };
     Plan { master, pushes }
+}
+
+/// What to do about the lists of saved places after a poll.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SavedPlan {
+    /// The list after this poll (possibly adopted from a device).
+    pub master: SavedPlaces,
+    /// Devices (by id) to push the list to.
+    pub pushes: Vec<String>,
+}
+
+/// Keep the lists of saved places the same everywhere, removals included.
+///
+/// Same rules as [`plan`]: a list changed on a device since the last poll is adopted (the first by
+/// id wins) and reaches the others; a device seen for the first time follows the master, unless the
+/// master is empty, in which case its list is adopted; unreachable devices (`None`) are skipped.
+/// Lists are compared as stored (same places, same order).
+pub fn plan_saved(
+    master: &SavedPlaces,
+    last_seen: &BTreeMap<String, SavedPlaces>,
+    observed: &BTreeMap<String, Option<SavedPlaces>>,
+) -> SavedPlan {
+    let mut master = master.clone();
+    for (id, obs) in observed {
+        let Some(list) = obs else { continue };
+        let adopt = match last_seen.get(id) {
+            Some(before) => before != list,
+            None => master.is_empty() && !list.is_empty(),
+        };
+        if adopt {
+            master = list.clone();
+            break;
+        }
+    }
+    let pushes = observed
+        .iter()
+        .filter(|(_, obs)| obs.as_ref().is_some_and(|l| *l != master))
+        .map(|(id, _)| id.clone())
+        .collect();
+    SavedPlan { master, pushes }
 }
 
 #[cfg(test)]
@@ -264,6 +305,82 @@ mod tests {
             p,
             Plan {
                 master: Some(stuttgart()),
+                pushes: vec![]
+            }
+        );
+    }
+
+    fn list(places: &[(f64, &str)]) -> SavedPlaces {
+        let mut l = SavedPlaces::new();
+        for (lat, name) in places {
+            l.add(Place::new(*lat, 0.0, name).expect("valid"))
+                .expect("room");
+        }
+        l
+    }
+
+    #[test]
+    fn a_list_made_on_the_web_is_pushed_to_devices_that_differ() {
+        let master = list(&[(10.0, "A"), (20.0, "B")]);
+        let observed = map(&[
+            ("c6", Some(master.clone())),
+            ("p4", Some(SavedPlaces::new())),
+        ]);
+        let last = map(&[("c6", master.clone()), ("p4", SavedPlaces::new())]);
+        let p = plan_saved(&master, &last, &observed);
+        assert_eq!(
+            p,
+            SavedPlan {
+                master,
+                pushes: vec!["p4".to_string()]
+            }
+        );
+    }
+
+    #[test]
+    fn a_removal_on_a_device_is_adopted_and_reaches_the_others() {
+        let before = list(&[(10.0, "A"), (20.0, "B")]);
+        let after = list(&[(20.0, "B")]);
+        let observed = map(&[("c6", Some(before.clone())), ("p4", Some(after.clone()))]);
+        let last = map(&[("c6", before.clone()), ("p4", before.clone())]);
+        let p = plan_saved(&before, &last, &observed);
+        assert_eq!(p.master, after, "the removal wins");
+        assert_eq!(p.pushes, ["c6".to_string()]);
+    }
+
+    #[test]
+    fn a_removal_on_the_web_is_pushed_and_not_undone_by_the_devices() {
+        // the web already dropped A; the devices still have it and did not change since the last poll
+        let before = list(&[(10.0, "A"), (20.0, "B")]);
+        let after = list(&[(20.0, "B")]);
+        let observed = map(&[("c6", Some(before.clone())), ("p4", Some(before.clone()))]);
+        let last = map(&[("c6", before.clone()), ("p4", before)]);
+        let p = plan_saved(&after, &last, &observed);
+        assert_eq!(p.master, after);
+        assert_eq!(p.pushes, ["c6".to_string(), "p4".to_string()]);
+    }
+
+    #[test]
+    fn a_new_device_follows_the_list_unless_the_master_is_empty() {
+        let mine = list(&[(10.0, "A")]);
+        let theirs = list(&[(30.0, "Z")]);
+        let observed = map(&[("c6", Some(theirs.clone()))]);
+        let p = plan_saved(&mine, &BTreeMap::new(), &observed);
+        assert_eq!((p.master.clone(), p.pushes), (mine, vec!["c6".to_string()]));
+        let p = plan_saved(&SavedPlaces::new(), &BTreeMap::new(), &observed);
+        assert_eq!(p.master, theirs, "an empty master takes the device's list");
+        assert!(p.pushes.is_empty());
+    }
+
+    #[test]
+    fn unreachable_and_unsupported_devices_are_skipped_and_equal_lists_need_nothing() {
+        let l = list(&[(10.0, "A")]);
+        let observed = map(&[("c6", None), ("p4", Some(l.clone()))]);
+        let last = map(&[("c6", SavedPlaces::new()), ("p4", l.clone())]);
+        assert_eq!(
+            plan_saved(&l, &last, &observed),
+            SavedPlan {
+                master: l,
                 pushes: vec![]
             }
         );

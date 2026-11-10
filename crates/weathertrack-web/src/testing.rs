@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use weathertrack_core::place::{Place, PlaceSource};
+use weathertrack_core::saved::SavedPlaces;
 use weathertrack_core::web::parse_query;
 use weathertrack_core::{Forecast, Location};
 use weathertrack_view::sample;
@@ -21,6 +22,7 @@ pub struct FakeDevice {
     pub place: Place,
     pub kind: PlaceSource,
     pub up: bool,
+    pub saved: SavedPlaces,
 }
 
 /// Where the fake network puts everyone who does not choose a place.
@@ -51,6 +53,7 @@ impl FakeNet {
                 place,
                 kind,
                 up: true,
+                saved: SavedPlaces::new(),
             },
         );
     }
@@ -60,6 +63,26 @@ impl FakeNet {
         let mut d = self.devices.lock().expect("lock");
         let dev = d.get_mut(url).expect("known device");
         (dev.place, dev.kind) = (place, PlaceSource::Searched);
+    }
+
+    /// The user changed the list of saved places on the device itself.
+    pub fn user_sets_saved(&self, url: &str, list: SavedPlaces) {
+        self.devices
+            .lock()
+            .expect("lock")
+            .get_mut(url)
+            .expect("known device")
+            .saved = list;
+    }
+
+    pub fn saved_of(&self, url: &str) -> SavedPlaces {
+        self.devices
+            .lock()
+            .expect("lock")
+            .get(url)
+            .expect("known device")
+            .saved
+            .clone()
     }
 
     pub fn set_up(&self, url: &str, up: bool) {
@@ -110,7 +133,8 @@ impl Net for FakeNet {
         Ok(serde_json::json!({
             "place": {"name": p.name, "lat": p.lat, "lon": p.lon, "kind": dev.kind.key(),
                       "coordinates": format!("{:.3}, {:.3}", p.lat, p.lon), "source": dev.kind.label(), "url": base},
-            "current": {"temperature": "12", "condition": "Clear", "updated": "Updated 13:00"}
+            "current": {"temperature": "12", "condition": "Clear", "updated": "Updated 13:00"},
+            "saved": dev.saved.places().iter().map(|p| serde_json::json!({"name": p.name, "lat": p.lat, "lon": p.lon})).collect::<Vec<_>>()
         })
         .to_string()
         .into_bytes())
@@ -137,6 +161,15 @@ impl Net for FakeNet {
                     .and_then(|(lat, lon)| Place::new(lat, lon, &get("name").unwrap_or_default()))
                     .ok_or("400")?;
                 (dev.place, dev.kind) = (place, PlaceSource::Searched);
+            }
+            "/saved" => {
+                let form = parse_query(body);
+                let list = form
+                    .iter()
+                    .find(|(n, _)| n == "list")
+                    .map(|(_, v)| v.clone())
+                    .unwrap_or_default();
+                dev.saved = SavedPlaces::decode(&list);
             }
             "/auto" => (dev.place, dev.kind) = (network_place(), PlaceSource::Network),
             _ => return Err("404".to_string()),

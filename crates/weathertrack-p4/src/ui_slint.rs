@@ -13,10 +13,11 @@ use slint::platform::{PointerEventButton, WindowEvent};
 use slint::{ComponentHandle, LogicalPosition, ModelRc, SharedString, VecModel};
 use weathertrack_core::app::Model;
 use weathertrack_core::place::{Place, PlaceChoice};
+use weathertrack_core::saved::{MAX_SAVED, SavedPlaces};
 use weathertrack_core::Location;
 
 use crate::hw::{self, Touch, TouchTracker, HEIGHT, WIDTH};
-use crate::ui::Ui;
+use crate::ui::{SavedEdit, Ui};
 use crate::{bridge, WeatherApp};
 
 /// Longest city name the on-screen keyboard accepts.
@@ -47,6 +48,8 @@ pub struct SlintUi {
     search: Rc<RefCell<Option<String>>>,
     found: Rc<RefCell<Vec<Location>>>,
     pick: Rc<RefCell<Option<PlaceChoice>>>,
+    saved: Rc<RefCell<Vec<Place>>>,
+    edit: Rc<RefCell<Option<SavedEdit>>>,
 }
 
 impl SlintUi {
@@ -127,6 +130,29 @@ impl SlintUi {
             let pick = pick.clone();
             move || *pick.borrow_mut() = Some(PlaceChoice::Auto)
         });
+        let saved: Rc<RefCell<Vec<Place>>> = Rc::new(RefCell::new(Vec::new()));
+        let edit = Rc::new(RefCell::new(None));
+        app.on_choose_saved({
+            let (saved, pick) = (saved.clone(), pick.clone());
+            move |i| {
+                let place = usize::try_from(i).ok().and_then(|i| saved.borrow().get(i).cloned());
+                if let Some(p) = place {
+                    *pick.borrow_mut() = Some(PlaceChoice::Manual(p));
+                }
+            }
+        });
+        app.on_save_current({
+            let edit = edit.clone();
+            move || *edit.borrow_mut() = Some(SavedEdit::SaveCurrent)
+        });
+        app.on_forget({
+            let edit = edit.clone();
+            move |i| {
+                if let Ok(i) = usize::try_from(i) {
+                    *edit.borrow_mut() = Some(SavedEdit::Forget(i));
+                }
+            }
+        });
         Ok(Self {
             app,
             window,
@@ -135,6 +161,8 @@ impl SlintUi {
             search,
             found,
             pick,
+            saved,
+            edit,
         })
     }
 
@@ -245,5 +273,26 @@ impl Ui for SlintUi {
 
     fn take_place_choice(&mut self) -> Option<PlaceChoice> {
         self.pick.borrow_mut().take()
+    }
+
+    fn set_saved(&mut self, saved: &SavedPlaces, current: &Place) {
+        let rows: Vec<crate::PlaceResult> = saved
+            .places()
+            .iter()
+            .map(|p| crate::PlaceResult {
+                name: SharedString::from(p.name.as_str()),
+                detail: SharedString::from(format!("{:.2}, {:.2}", p.lat, p.lon)),
+            })
+            .collect();
+        let selected = saved.places().iter().position(|p| (p.lat - current.lat).abs() < 0.01 && (p.lon - current.lon).abs() < 0.01);
+        *self.saved.borrow_mut() = saved.places().to_vec();
+        self.app.set_saved(ModelRc::new(VecModel::from(rows)));
+        self.app.set_selected(selected.map_or(-1, |i| i as i32));
+        self.app.set_can_save(saved.len() < MAX_SAVED);
+        self.draw();
+    }
+
+    fn take_saved_edit(&mut self) -> Option<SavedEdit> {
+        self.edit.borrow_mut().take()
     }
 }

@@ -4,6 +4,7 @@
 //! server, flash or network types here, so all of it is tested (and fuzzed) on the host.
 
 use crate::place::{Place, PlaceChoice, PlaceSource};
+use crate::saved::{AddError, SavedPlaces};
 use crate::types::Location;
 
 // ── URL and HTML helpers ────────────────────────────────────────────────────
@@ -114,12 +115,16 @@ impl<'a> Request<'a> {
 pub struct Context {
     pub current: Place,
     pub source: PlaceSource,
+    /// The places kept in the list.
+    pub saved: SavedPlaces,
 }
 
 /// What the main loop must do after a request.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Choose(PlaceChoice),
+    /// The list of saved places changed: store it (flash) and show it.
+    Saved(SavedPlaces),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -191,6 +196,7 @@ pub fn route(req: &Request, ctx: &Context, geo: &dyn Geocoder) -> Response {
                     let next = Context {
                         current: p.clone(),
                         source: PlaceSource::Searched,
+                        saved: ctx.saved.clone(),
                     };
                     page(
                         200,
@@ -212,6 +218,82 @@ pub fn route(req: &Request, ctx: &Context, geo: &dyn Geocoder) -> Response {
             Some("Back to your network location. It is looked up on the next refresh."),
             Some(Action::Choose(PlaceChoice::Auto)),
         ),
+        (Method::Post, "/save") => {
+            // a place from the form, or else the one in use
+            let form = parse_query(req.body);
+            let place = param(&form, "lat")
+                .and_then(|v| v.parse::<f64>().ok())
+                .zip(param(&form, "lon").and_then(|v| v.parse::<f64>().ok()))
+                .and_then(|(lat, lon)| Place::new(lat, lon, param(&form, "name").unwrap_or("")))
+                .or_else(|| param(&form, "lat").is_none().then(|| ctx.current.clone()));
+            let mut list = ctx.saved.clone();
+            let (status, message, action) = match place.map(|p| (p.name.clone(), list.add(p))) {
+                Some((name, Ok(()))) => (
+                    200,
+                    format!("{name} saved."),
+                    Some(Action::Saved(list.clone())),
+                ),
+                Some((name, Err(AddError::Duplicate))) => {
+                    (200, format!("{name} is in your list already."), None)
+                }
+                Some((_, Err(AddError::Full))) => (
+                    200,
+                    format!(
+                        "The list is full ({} places). Remove one first.",
+                        crate::saved::MAX_SAVED
+                    ),
+                    None,
+                ),
+                None => (400, "That place was not valid.".to_string(), None),
+            };
+            let next = Context {
+                saved: list,
+                ..ctx.clone()
+            };
+            page(status, &next, "", &[], Some(&message), action)
+        }
+        (Method::Post, "/forget") => {
+            let form = parse_query(req.body);
+            let mut list = ctx.saved.clone();
+            let removed = param(&form, "i")
+                .and_then(|v| v.parse::<usize>().ok())
+                .and_then(|i| list.remove(i));
+            match removed {
+                Some(p) => {
+                    let next = Context {
+                        saved: list.clone(),
+                        ..ctx.clone()
+                    };
+                    page(
+                        200,
+                        &next,
+                        "",
+                        &[],
+                        Some(&format!("{} removed from your list.", p.name)),
+                        Some(Action::Saved(list)),
+                    )
+                }
+                None => page(
+                    400,
+                    ctx,
+                    "",
+                    &[],
+                    Some("That place is not in the list."),
+                    None,
+                ),
+            }
+        }
+        // Replace the whole list (the PC web app keeps the devices' lists the same as its own).
+        (Method::Post, "/saved") => {
+            let form = parse_query(req.body);
+            let list = SavedPlaces::decode(param(&form, "list").unwrap_or(""));
+            let next = Context {
+                saved: list.clone(),
+                ..ctx.clone()
+            };
+            let action = (list != ctx.saved).then_some(Action::Saved(list));
+            page(200, &next, "", &[], Some("Saved places updated."), action)
+        }
         _ => Response {
             status: 404,
             content_type: HTML,
@@ -248,7 +330,8 @@ nav a{color:var(--muted);text-decoration:none;padding:.45rem 1rem;border-radius:
 .msg{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.8rem;margin:1rem 0}\
 input,button{font:inherit;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--text);padding:.7rem}\
 input[type=search]{width:calc(100% - 6rem)}button{cursor:pointer}button.go{background:var(--accent);color:#0a1327;border:0;font-weight:700}\
-ul{list-style:none;padding:0}li{margin:.5rem 0}li button{width:100%;text-align:left}small{color:var(--muted);display:block}";
+ul{list-style:none;padding:0}li{margin:.5rem 0}li button{width:100%;text-align:left}small{color:var(--muted);display:block}\
+h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}li.sv{display:flex;gap:.5rem}li.sv form:first-child{flex:1}li.sv form:last-child button{width:3rem;text-align:center}";
 
 /// A full HTML page: navigation bar, `body`, shared styles plus `extra_css`, optional `<head>` extras.
 pub fn page_shell(
@@ -292,6 +375,21 @@ fn page(
     );
     if let Some(m) = message {
         b.push_str(&format!("<div class=msg>{}</div>", escape_html(m)));
+    }
+    if !ctx.saved.contains(&ctx.current) {
+        b.push_str("<form method=post action=/save><p><button>Save this place to my list</button></p></form>");
+    }
+    if !ctx.saved.is_empty() {
+        b.push_str("<h3>My places</h3><ul>");
+        for (i, p) in ctx.saved.places().iter().enumerate() {
+            let name = escape_html(&p.name);
+            b.push_str(&format!(
+                "<li class=sv><form method=post action=/set><input type=hidden name=lat value=\"{}\"><input type=hidden name=lon value=\"{}\"><input type=hidden name=name value=\"{name}\"><button>{name}</button></form>\
+<form method=post action=/forget><input type=hidden name=i value={i}><button aria-label=\"Remove {name}\">x</button></form></li>",
+                p.lat, p.lon
+            ));
+        }
+        b.push_str("</ul>");
     }
     b.push_str(&format!(
         "<form method=get action=/place><input type=search name=q placeholder=\"Search a city\" value=\"{}\" maxlength=60 autofocus> <button class=go>Search</button></form>",
@@ -343,6 +441,7 @@ mod tests {
         Context {
             current: Place::new(49.32, 9.1, "Bad Rappenau").expect("valid"),
             source: PlaceSource::Network,
+            saved: SavedPlaces::new(),
         }
     }
 
@@ -537,6 +636,153 @@ mod tests {
             !route(&Request::new(Method::Get, "/", ""), &c, &geo)
                 .html
                 .contains("<script>")
+        );
+    }
+
+    fn post(path: &str, body: &str, ctx: &Context) -> Response {
+        route(
+            &Request::new(Method::Post, path, body),
+            ctx,
+            &Fake(Ok(vec![])),
+        )
+    }
+
+    fn with_saved(places: &[(f64, f64, &str)]) -> Context {
+        let mut c = ctx();
+        for (lat, lon, name) in places {
+            c.saved
+                .add(Place::new(*lat, *lon, name).expect("valid"))
+                .expect("room");
+        }
+        c
+    }
+
+    #[test]
+    fn saving_without_a_form_saves_the_place_in_use() {
+        let r = post("/save", "", &ctx());
+        assert_eq!(r.status, 200);
+        let Some(Action::Saved(list)) = r.action else {
+            panic!("expected a saved list: {:?}", r.action)
+        };
+        assert_eq!(list.places()[0].name, "Bad Rappenau");
+        assert!(r.html.contains("Bad Rappenau saved."));
+    }
+
+    #[test]
+    fn saving_a_place_from_the_form() {
+        let r = post("/save", "lat=48.78&lon=9.18&name=Stuttgart", &ctx());
+        assert!(
+            matches!(r.action, Some(Action::Saved(ref l)) if l.places()[0].name == "Stuttgart")
+        );
+        assert_eq!(
+            post("/save", "lat=999&lon=9&name=X", &ctx()).status,
+            400,
+            "invalid places are refused"
+        );
+    }
+
+    #[test]
+    fn saving_twice_or_past_the_limit_is_explained_and_changes_nothing() {
+        let c = with_saved(&[(49.32, 9.1, "Bad Rappenau")]);
+        let r = post("/save", "", &c);
+        assert!(r.action.is_none() && r.html.contains("in your list already"));
+        let mut full = ctx();
+        for i in 0..crate::saved::MAX_SAVED {
+            full.saved
+                .add(Place::new(i as f64 * 5.0 + 1.0, 0.0, "x").expect("valid"))
+                .expect("room");
+        }
+        let r = post("/save", "lat=70&lon=70&name=More", &full);
+        assert!(r.action.is_none() && r.html.contains("list is full"));
+    }
+
+    #[test]
+    fn forgetting_removes_by_index_and_the_page_no_longer_lists_it() {
+        let c = with_saved(&[(48.78, 9.18, "Stuttgart"), (52.52, 13.4, "Berlin")]);
+        let r = post("/forget", "i=0", &c);
+        let Some(Action::Saved(list)) = r.action else {
+            panic!("expected a saved list")
+        };
+        assert_eq!(
+            list.places()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Berlin"]
+        );
+        assert!(r.html.contains("Stuttgart removed") && !r.html.contains("value=\"Stuttgart\""));
+        assert_eq!(post("/forget", "i=7", &c).status, 400);
+        assert_eq!(post("/forget", "i=abc", &c).status, 400);
+    }
+
+    #[test]
+    fn the_list_is_shown_with_a_switch_and_a_remove_button_each() {
+        let c = with_saved(&[(48.78, 9.18, "Stuttgart")]);
+        let html = get("/place", &Fake(Ok(vec![]))).html;
+        assert!(!html.contains("My places"), "nothing saved: no list");
+        let r = route(
+            &Request::new(Method::Get, "/place", ""),
+            &c,
+            &Fake(Ok(vec![])),
+        );
+        assert!(
+            r.html.contains("My places")
+                && r.html.contains("action=/forget")
+                && r.html.contains("name=i value=0")
+        );
+        assert!(
+            r.html.contains("Save this place"),
+            "the place in use is not in the list"
+        );
+        let inside = with_saved(&[(49.32, 9.1, "Bad Rappenau")]);
+        let r = route(
+            &Request::new(Method::Get, "/place", ""),
+            &inside,
+            &Fake(Ok(vec![])),
+        );
+        assert!(
+            !r.html.contains("Save this place"),
+            "already saved: no save button"
+        );
+    }
+
+    #[test]
+    fn saved_names_are_escaped() {
+        let c = with_saved(&[(1.0, 1.0, "<b>x\"&")]);
+        let r = route(
+            &Request::new(Method::Get, "/place", ""),
+            &c,
+            &Fake(Ok(vec![])),
+        );
+        assert!(!r.html.contains("<b>x") && r.html.contains("&lt;b&gt;x"));
+    }
+
+    #[test]
+    fn replacing_the_whole_list_for_the_pc_app() {
+        let c = with_saved(&[(48.78, 9.18, "Stuttgart")]);
+        let r = post("/saved", "list=52.52%7C13.4%7CBerlin%0A1%7C2%7CX", &c);
+        let Some(Action::Saved(list)) = r.action else {
+            panic!("expected a saved list")
+        };
+        assert_eq!(
+            list.places()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Berlin", "X"]
+        );
+        let same = post(
+            "/saved",
+            &format!("list={}", url_encode(&c.saved.encode())),
+            &c,
+        );
+        assert!(
+            same.action.is_none(),
+            "nothing to store when nothing changed"
+        );
+        assert!(
+            post("/saved", "list=", &c).action.is_some(),
+            "an empty list clears it"
         );
     }
 }

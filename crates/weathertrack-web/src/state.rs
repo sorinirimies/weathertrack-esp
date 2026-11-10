@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use weathertrack_core::app::{self, Model, Msg};
 use weathertrack_core::place::{Place, PlaceChoice, PlaceSource};
-use weathertrack_core::sync::{plan, same_choice};
+use weathertrack_core::saved::{AddError, SavedPlaces};
+use weathertrack_core::sync::{plan, plan_saved, same_choice};
 use weathertrack_view::ViewModel;
 
 use crate::device::{self, DeviceStatus};
@@ -31,6 +32,9 @@ pub struct Config {
     /// Keep the devices on the master place automatically.
     #[serde(default)]
     pub sync: bool,
+    /// The saved places, as `SavedPlaces::encode` text.
+    #[serde(default)]
+    pub saved: String,
 }
 
 /// The outcome of one push to a device.
@@ -54,6 +58,8 @@ pub struct Snapshot {
     pub sync: bool,
     pub devices: Vec<DeviceRow>,
     pub pushes: Vec<Push>,
+    /// The places kept in the list.
+    pub saved: SavedPlaces,
 }
 
 /// One device with its status and whether it matches the master.
@@ -76,6 +82,8 @@ struct Data {
     fetched: Option<Instant>,
     statuses: BTreeMap<String, DeviceStatus>,
     last_seen: BTreeMap<String, PlaceChoice>,
+    saved: SavedPlaces,
+    last_saved: BTreeMap<String, SavedPlaces>,
     pushes: Vec<Push>,
 }
 
@@ -112,9 +120,11 @@ impl Shared {
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_default();
         let master = config.choice.as_deref().map(PlaceChoice::decode);
+        let saved = SavedPlaces::decode(&config.saved);
         let data = Data {
             config,
             master,
+            saved,
             ..Data::default()
         };
         Self(Arc::new(Inner {
@@ -245,6 +255,46 @@ impl Shared {
                 });
             }
         }
+        // The saved places follow the same rules.
+        let (saved_master, last_saved, observed_saved) = {
+            let d = self.data();
+            let observed: BTreeMap<String, Option<SavedPlaces>> = d
+                .statuses
+                .iter()
+                .map(|(u, st)| (u.clone(), st.reachable.then(|| st.saved.clone()).flatten()))
+                .collect();
+            (d.saved.clone(), d.last_saved.clone(), observed)
+        };
+        let sp = plan_saved(&saved_master, &last_saved, &observed_saved);
+        if sp.master != saved_master {
+            let mut d = self.data();
+            d.config.saved = sp.master.encode();
+            d.saved = sp.master.clone();
+            self.save(&d);
+        }
+        let mut saved_sent: BTreeMap<String, SavedPlaces> = BTreeMap::new();
+        if push {
+            for url in &sp.pushes {
+                let r = device::push_saved(&*self.0.net, url, &sp.master);
+                if r.is_ok() {
+                    saved_sent.insert(url.clone(), sp.master.clone());
+                }
+                reports.push(Push {
+                    device: url.clone(),
+                    sent: format!("{} saved place(s)", sp.master.len()),
+                    ok: r.is_ok(),
+                    error: r.err(),
+                });
+            }
+        }
+        {
+            let mut d = self.data();
+            for (url, list) in &observed_saved {
+                if let Some(l) = saved_sent.get(url).cloned().or_else(|| list.clone()) {
+                    d.last_saved.insert(url.clone(), l);
+                }
+            }
+        }
         {
             // what we expect to see next time: what we just sent, else what the device said
             let mut d = self.data();
@@ -264,7 +314,7 @@ impl Shared {
         if master_changed {
             self.refresh_weather();
         }
-        if !sent.is_empty() {
+        if !sent.is_empty() || !saved_sent.is_empty() {
             self.poll_devices();
         }
         reports
@@ -298,6 +348,36 @@ impl Shared {
         }
         self.refresh_weather();
         if apply { self.sync(true) } else { Vec::new() }
+    }
+
+    /// Add a place to the list (or fail: already there, or the list is full); with `apply`, send
+    /// the list to the devices now.
+    pub fn save_place(&self, place: Place, apply: bool) -> Result<(), AddError> {
+        {
+            let mut d = self.data();
+            d.saved.add(place)?;
+            d.config.saved = d.saved.encode();
+            self.save(&d);
+        }
+        if apply {
+            self.sync(true);
+        }
+        Ok(())
+    }
+
+    /// Remove the place at `index` from the list; with `apply`, the devices drop it too, now.
+    pub fn forget_place(&self, index: usize, apply: bool) -> bool {
+        let removed = {
+            let mut d = self.data();
+            let removed = d.saved.remove(index).is_some();
+            d.config.saved = d.saved.encode();
+            self.save(&d);
+            removed
+        };
+        if removed && apply {
+            self.sync(true);
+        }
+        removed
     }
 
     /// Add a device by address; false if the address is not valid or already known.
@@ -363,6 +443,7 @@ impl Shared {
             sync: d.config.sync,
             devices,
             pushes: d.pushes.clone(),
+            saved: d.saved.clone(),
         }
     }
 }
@@ -607,5 +688,99 @@ mod tests {
                 .is_some_and(|e| e.contains("offline"))
         );
         assert!(snap.vm.is_none());
+    }
+
+    fn names(l: &SavedPlaces) -> Vec<String> {
+        l.places().iter().map(|p| p.name.clone()).collect()
+    }
+
+    #[test]
+    fn saving_on_the_web_puts_the_place_on_every_device() {
+        let net = Arc::new(FakeNet::with_devices(&[C6, P4]));
+        let s = hub(&net, &[C6, P4]);
+        s.save_place(stuttgart(), true).expect("saved");
+        s.save_place(berlin(), true).expect("saved");
+        for d in [C6, P4] {
+            assert_eq!(names(&net.saved_of(d)), ["Stuttgart", "Berlin"], "{d}");
+        }
+        assert_eq!(s.save_place(stuttgart(), true), Err(AddError::Duplicate));
+    }
+
+    #[test]
+    fn removing_on_the_web_removes_it_everywhere_and_it_stays_removed() {
+        let net = Arc::new(FakeNet::with_devices(&[C6, P4]));
+        let s = hub(&net, &[C6, P4]);
+        s.save_place(stuttgart(), true).expect("saved");
+        s.save_place(berlin(), true).expect("saved");
+        assert!(s.forget_place(0, true));
+        for d in [C6, P4] {
+            assert_eq!(names(&net.saved_of(d)), ["Berlin"], "{d}");
+        }
+        s.sync(true);
+        s.sync(true);
+        assert_eq!(
+            names(&s.snapshot().saved),
+            ["Berlin"],
+            "no device brings it back"
+        );
+    }
+
+    #[test]
+    fn a_list_changed_on_a_device_spreads_to_the_web_and_the_other_device() {
+        let net = Arc::new(FakeNet::with_devices(&[C6, P4]));
+        let s = hub(&net, &[C6, P4]);
+        s.save_place(stuttgart(), true).expect("saved");
+        // on the P4's screen: Berlin is added
+        let mut l = net.saved_of(P4);
+        l.add(berlin()).expect("room");
+        net.user_sets_saved(P4, l);
+        s.sync(true);
+        assert_eq!(names(&s.snapshot().saved), ["Stuttgart", "Berlin"]);
+        assert_eq!(names(&net.saved_of(C6)), ["Stuttgart", "Berlin"]);
+        // and removed again on the C6's website: gone everywhere
+        let mut l = net.saved_of(C6);
+        l.remove(0);
+        net.user_sets_saved(C6, l);
+        s.sync(true);
+        assert_eq!(names(&s.snapshot().saved), ["Berlin"]);
+        assert_eq!(names(&net.saved_of(P4)), ["Berlin"]);
+    }
+
+    #[test]
+    fn without_apply_only_the_web_list_changes() {
+        let net = Arc::new(FakeNet::with_devices(&[C6]));
+        let s = hub(&net, &[C6]);
+        s.save_place(stuttgart(), false).expect("saved");
+        assert!(net.posts().is_empty());
+        assert_eq!(names(&s.snapshot().saved), ["Stuttgart"]);
+    }
+
+    #[test]
+    fn the_list_survives_a_restart() {
+        let dir = std::env::temp_dir().join(format!(
+            "wt-web-saved-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let path = dir.join("web.json");
+        let _ = std::fs::remove_dir_all(&dir);
+        let net = Arc::new(FakeNet::default());
+        {
+            let s = Shared::new(
+                net.clone(),
+                Arc::new(FakeWeather::default()),
+                Some(path.clone()),
+            );
+            s.save_place(stuttgart(), false).expect("saved");
+            s.save_place(berlin(), false).expect("saved");
+            s.forget_place(0, false);
+        }
+        let again = Shared::new(net, Arc::new(FakeWeather::default()), Some(path));
+        assert_eq!(
+            names(&again.snapshot().saved),
+            ["Berlin"],
+            "the removal is stored too"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

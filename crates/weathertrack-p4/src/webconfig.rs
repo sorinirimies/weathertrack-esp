@@ -9,6 +9,7 @@ use esp_idf_svc::http::server::{Configuration, EspHttpServer};
 use esp_idf_svc::http::Method as HttpMethod;
 use esp_idf_svc::io::Write;
 use weathertrack_core::place::{Place, PlaceChoice, PlaceSource};
+use weathertrack_core::saved::SavedPlaces;
 use weathertrack_core::web::{Action, Context, Geocoder, Method, Request};
 use weathertrack_core::{build_geocode_url, parse_geocode, Location};
 use weathertrack_view::{web as site, ViewModel};
@@ -36,6 +37,8 @@ impl Geocoder for NetGeocoder {
 struct Shared {
     ctx: Mutex<Context>,
     pending: Mutex<Option<PlaceChoice>>,
+    /// A new list of saved places made on the page, until the main loop stores it.
+    pending_saved: Mutex<Option<SavedPlaces>>,
     /// The latest weather, for the dashboard page.
     view: Mutex<ViewModel>,
 }
@@ -48,10 +51,11 @@ pub struct PlaceServer {
 
 impl PlaceServer {
     /// Start serving; `current` is what the page shows until [`set_place`](Self::set_place).
-    pub fn start(current: Place, source: PlaceSource) -> anyhow::Result<Self> {
+    pub fn start(current: Place, source: PlaceSource, saved: SavedPlaces) -> anyhow::Result<Self> {
         let shared = Arc::new(Shared {
-            ctx: Mutex::new(Context { current, source }),
+            ctx: Mutex::new(Context { current, source, saved }),
             pending: Mutex::new(None),
+            pending_saved: Mutex::new(None),
             view: Mutex::new(ViewModel::default()),
         });
         let mut server = EspHttpServer::new(&Configuration {
@@ -86,7 +90,15 @@ impl PlaceServer {
     /// Update what the page shows as the place in use.
     pub fn set_place(&self, current: Place, source: PlaceSource) {
         if let Ok(mut ctx) = self.shared.ctx.lock() {
-            *ctx = Context { current, source };
+            ctx.current = current;
+            ctx.source = source;
+        }
+    }
+
+    /// Show this list of saved places on the page (after the screen changed it).
+    pub fn set_saved(&self, saved: SavedPlaces) {
+        if let Ok(mut ctx) = self.shared.ctx.lock() {
+            ctx.saved = saved;
         }
     }
 
@@ -95,6 +107,11 @@ impl PlaceServer {
         if let Ok(mut v) = self.shared.view.lock() {
             *v = view;
         }
+    }
+
+    /// The list of saved places the user changed on the page since the last call, if they did.
+    pub fn take_saved(&self) -> Option<SavedPlaces> {
+        self.shared.pending_saved.lock().ok()?.take()
     }
 
     /// The choice the user made on the page since the last call, if any.
@@ -113,15 +130,25 @@ fn respond(
     let ctx = shared.ctx.lock().map_err(|_| anyhow::anyhow!("state poisoned"))?.clone();
     let view = shared.view.lock().map_err(|_| anyhow::anyhow!("state poisoned"))?.clone();
     let response = site::route(&Request::new(method, uri, body), &ctx, &NetGeocoder, &view);
-    if let Some(Action::Choose(choice)) = response.action {
-        if let Ok(mut ctx) = shared.ctx.lock() {
-            if let PlaceChoice::Manual(p) = &choice {
-                *ctx = Context { current: p.clone(), source: PlaceSource::Searched };
+    match response.action {
+        Some(Action::Choose(choice)) => {
+            if let (Ok(mut ctx), PlaceChoice::Manual(p)) = (shared.ctx.lock(), &choice) {
+                ctx.current = p.clone();
+                ctx.source = PlaceSource::Searched;
+            }
+            if let Ok(mut pending) = shared.pending.lock() {
+                *pending = Some(choice);
             }
         }
-        if let Ok(mut pending) = shared.pending.lock() {
-            *pending = Some(choice);
+        Some(Action::Saved(list)) => {
+            if let Ok(mut ctx) = shared.ctx.lock() {
+                ctx.saved = list.clone();
+            }
+            if let Ok(mut pending) = shared.pending_saved.lock() {
+                *pending = Some(list);
+            }
         }
+        None => {}
     }
     let mut out = req.into_response(response.status, None, &[("Content-Type", response.content_type)])?;
     out.write_all(response.html.as_bytes())?;

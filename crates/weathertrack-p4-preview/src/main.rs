@@ -79,8 +79,20 @@ fn main() {
         shot(n);
     }
 
-    // The Place tab while searching: a typed city and its results.
+    // The Place tab: the list of saved places, the place in use highlighted
+    app.set_saved(slint::ModelRc::new(slint::VecModel::from(vec![
+        PlaceResult { name: "Cluj-Napoca".into(), detail: "46.77, 23.60".into() },
+        PlaceResult { name: "Stuttgart".into(), detail: "48.78, 9.18".into() },
+        PlaceResult { name: "Berlin".into(), detail: "52.52, 13.41".into() },
+        PlaceResult { name: "München".into(), detail: "48.14, 11.58".into() },
+        PlaceResult { name: "Zürich".into(), detail: "47.38, 8.54".into() },
+    ])));
+    app.set_selected(0);
     app.set_tab(4);
+    shot("5-place-list");
+
+    // The Place tab while searching: a typed city and its results.
+    app.set_searching(true);
     app.set_query("stuttgart".into());
     app.set_results(slint::ModelRc::new(slint::VecModel::from(vec![
         PlaceResult { name: "Stuttgart".into(), detail: "Baden-Württemberg, Germany".into() },

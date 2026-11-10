@@ -191,7 +191,7 @@ fn main() {
     let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
     model.place_source = source;
     // The page where the place can be changed (type a city on a phone).
-    let server = match PlaceServer::start(current.clone(), source) {
+    let server = match PlaceServer::start(current.clone(), source, place::load_saved(&nvs_store)) {
         Ok(s) => Some(s),
         Err(e) => {
             log::warn!("place page not started: {e}");
@@ -240,6 +240,10 @@ fn main() {
     let mut last_fetch: u32 = 0;
 
     loop {
+        // The list of saved places was changed on the web page: keep it in flash
+        if let Some(list) = server.as_ref().and_then(PlaceServer::take_saved) {
+            place::save_saved(&mut nvs_store, &list);
+        }
         // A place chosen on the web page
         if let Some(new_choice) = server.as_ref().and_then(PlaceServer::take_choice) {
             place::save_choice(&mut nvs_store, &new_choice);

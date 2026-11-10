@@ -35,9 +35,10 @@ use esp_idf_svc::{
 use weathertrack_core::app::{self, Model, Msg};
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
 use weathertrack_core::place::Place;
+use weathertrack_core::saved::SavedPlaces;
 use weathertrack_view::ViewModel;
 
-use crate::ui::Ui;
+use crate::ui::{SavedEdit, Ui};
 use crate::webconfig::PlaceServer;
 
 #[cfg(feature = "slint-ui")]
@@ -94,6 +95,13 @@ fn apply_backlight(model: &Model) {
 }
 
 /// Give the web dashboard the latest weather.
+/// Tell the screen which places are saved and which one is in use.
+fn show_saved(ui: &mut impl Ui, saved: &SavedPlaces, model: &Model) {
+    if let Some(current) = Place::new(model.lat, model.lon, &model.location) {
+        ui.set_saved(saved, &current);
+    }
+}
+
 fn publish(server: &Option<PlaceServer>, model: &Model) {
     if let Some(s) = server {
         s.set_view(ViewModel::from_model(model, 24));
@@ -204,8 +212,9 @@ fn run() -> anyhow::Result<()> {
     (cfg.lat, cfg.lon, cfg.location) = (current.lat, current.lon, current.name.clone());
     store::save_config(&mut nvs_store, &cfg);
     model.place_source = source;
+    let mut saved = place::load_saved(&nvs_store);
     // The page where the place can be changed (type a city on a phone or computer).
-    let server = match PlaceServer::start(current.clone(), source) {
+    let server = match PlaceServer::start(current.clone(), source, saved.clone()) {
         Ok(s) => Some(s),
         Err(e) => {
             log::warn!("place page not started: {e}");
@@ -216,6 +225,7 @@ fn run() -> anyhow::Result<()> {
         model.config_url = Some(format!("http://{}/", ip.ip));
     }
     publish(&server, &model);
+    show_saved(&mut ui, &saved, &model);
 
     // ── First fetch ─────────────────────────────────────────────────
     loop {
@@ -262,6 +272,32 @@ fn run() -> anyhow::Result<()> {
                 }
             }
         }
+        // The list of saved places was changed on the web page or on the screen: keep it in flash
+        let mut list_changed = false;
+        if let Some(list) = server.as_ref().and_then(PlaceServer::take_saved) {
+            saved = list;
+            list_changed = true;
+        }
+        if let Some(edit) = ui.take_saved_edit() {
+            match edit {
+                SavedEdit::SaveCurrent => {
+                    if let Some(p) = Place::new(model.lat, model.lon, &model.location) {
+                        let _ = saved.add(p);
+                    }
+                }
+                SavedEdit::Forget(i) => {
+                    saved.remove(i);
+                }
+            }
+            if let Some(s) = &server {
+                s.set_saved(saved.clone());
+            }
+            list_changed = true;
+        }
+        if list_changed {
+            place::save_saved(&mut nvs_store, &saved);
+            show_saved(&mut ui, &saved, &model);
+        }
         // A place chosen on the web page or on the screen: use it and fetch its weather right away
         if let Some(new_choice) = server
             .as_ref()
@@ -287,6 +323,7 @@ fn run() -> anyhow::Result<()> {
             }
             ui.show(&model, offline);
     publish(&server, &model);
+            show_saved(&mut ui, &saved, &model);
             manual = true;
         }
         if let Some(theme) = ui.take_theme_change() {

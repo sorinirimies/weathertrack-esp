@@ -12,6 +12,7 @@ use topcoat::{
     view::{View, view},
 };
 use weathertrack_core::place::{Place, PlaceChoice};
+use weathertrack_core::saved::{AddError, MAX_SAVED};
 use weathertrack_view::html::{dashboard_body, refresh_seconds};
 
 use crate::components::{banner, device_card, document, weather_body};
@@ -33,6 +34,12 @@ fn message(code: Option<&str>) -> Option<&'static str> {
         "chosen-sent" => "Place chosen and sent to your devices.",
         "auto" => "Now using your network location.",
         "auto-sent" => "Now using your network location, on your devices too.",
+        "saved" => "Saved to your list.",
+        "saved-sent" => "Saved to your list, and sent to your devices.",
+        "dup" => "That place is in your list already.",
+        "full" => "Your list is full. Remove a place first.",
+        "forgot" => "Removed from your list.",
+        "forgot-sent" => "Removed from your list, and from your devices.",
         "invalid" => "That place is not valid.",
         "added" => "Device added.",
         "badurl" => "That does not look like a device address. Try 192.168.3.210.",
@@ -122,6 +129,26 @@ async fn place(cx: &Cx) -> Result<impl View> {
         }
     };
     let apply = if snap.sync { "1" } else { "0" };
+    let in_list = snap.place.as_ref().is_some_and(|p| snap.saved.contains(p));
+    let can_save = snap.place.is_some() && !in_list && snap.saved.len() < MAX_SAVED;
+    let current_fields = snap
+        .place
+        .as_ref()
+        .map(|p| (p.lat.to_string(), p.lon.to_string(), p.name.clone()));
+    let saved_rows: Vec<_> = snap
+        .saved
+        .places()
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            (
+                i.to_string(),
+                p.lat.to_string(),
+                p.lon.to_string(),
+                p.name.clone(),
+            )
+        })
+        .collect();
     let msg = message(p.done.as_deref()).map(str::to_string);
     let searched = !query.is_empty();
     let rows: Vec<_> = found
@@ -153,6 +180,38 @@ async fn place(cx: &Cx) -> Result<impl View> {
                 <h2>(current)</h2>
                 <p class="m">"Using " (mode) ". " (note)</p>
             </div>
+            if can_save {
+                if let Some((lat, lon, name)) = &current_fields {
+                    <form method="post" action="/place/save">
+                        <input type="hidden" name="lat" value=(lat.clone())>
+                        <input type="hidden" name="lon" value=(lon.clone())>
+                        <input type="hidden" name="name" value=(name.clone())>
+                        <input type="hidden" name="apply" value=(apply)>
+                        <p><button type="submit">"Save this place to my list"</button></p>
+                    </form>
+                }
+            }
+            if !saved_rows.is_empty() {
+                <h3>"My places"</h3>
+                <ul>
+                    for (i, lat, lon, name) in &saved_rows {
+                        <li class="sv">
+                            <form method="post" action="/place/choose">
+                                <input type="hidden" name="lat" value=(lat.clone())>
+                                <input type="hidden" name="lon" value=(lon.clone())>
+                                <input type="hidden" name="name" value=(name.clone())>
+                                <input type="hidden" name="apply" value=(apply)>
+                                <button type="submit">(name.clone())</button>
+                            </form>
+                            <form method="post" action="/place/forget">
+                                <input type="hidden" name="i" value=(i.clone())>
+                                <input type="hidden" name="apply" value=(apply)>
+                                <button type="submit" aria-label="Remove">"x"</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            }
             <h3>"Find a city"</h3>
             <form class="add" method="get" action="/place">
                 <input type="search" name="q" value=(query.clone()) placeholder="City, e.g. Stuttgart" aria-label="City" autofocus="">
@@ -203,6 +262,43 @@ async fn choose(cx: &Cx, Form(f): Form<ChooseForm>) -> Result<SeeOther> {
         "/?done=chosen-sent"
     } else {
         "/?done=chosen"
+    }))
+}
+
+#[route(POST "/place/save")]
+async fn save_place(cx: &Cx, Form(f): Form<ChooseForm>) -> Result<SeeOther> {
+    let Some(p) = Place::new(f.lat, f.lon, &f.name) else {
+        return Ok(see_other("/place?done=invalid"));
+    };
+    let st = shared(cx);
+    let apply = f.apply.as_deref() == Some("1");
+    let r = blocking(move || st.save_place(p, apply)).await;
+    Ok(see_other(match r {
+        Some(Ok(())) if apply => "/place?done=saved-sent",
+        Some(Ok(())) => "/place?done=saved",
+        Some(Err(AddError::Duplicate)) => "/place?done=dup",
+        Some(Err(AddError::Full)) => "/place?done=full",
+        None => "/place?done=invalid",
+    }))
+}
+
+#[derive(Deserialize)]
+struct ForgetForm {
+    i: usize,
+    apply: Option<String>,
+}
+
+#[route(POST "/place/forget")]
+async fn forget_place(cx: &Cx, Form(f): Form<ForgetForm>) -> Result<SeeOther> {
+    let st = shared(cx);
+    let apply = f.apply.as_deref() == Some("1");
+    let removed = blocking(move || st.forget_place(f.i, apply))
+        .await
+        .unwrap_or(false);
+    Ok(see_other(match (removed, apply) {
+        (true, true) => "/place?done=forgot-sent",
+        (true, false) => "/place?done=forgot",
+        (false, _) => "/place?done=invalid",
     }))
 }
 

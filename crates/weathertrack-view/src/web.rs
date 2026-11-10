@@ -17,12 +17,27 @@ pub fn route(req: &Request, ctx: &Context, geo: &dyn Geocoder, vm: &ViewModel) -
         },
         (Method::Get, "/api/weather.json") => Response {
             status: 200,
-            html: serde_json::to_string(vm).unwrap_or_else(|_| "{}".to_string()),
+            html: json_with_saved(vm, ctx),
             content_type: JSON,
             action: None,
         },
         _ => web::route(req, ctx, geo),
     }
+}
+
+/// The view model as JSON plus the saved places, so the PC app can mirror the list.
+fn json_with_saved(vm: &ViewModel, ctx: &Context) -> String {
+    let mut v = serde_json::to_value(vm).unwrap_or_else(|_| serde_json::json!({}));
+    let saved: Vec<_> = ctx
+        .saved
+        .places()
+        .iter()
+        .map(|p| serde_json::json!({"name": p.name, "lat": p.lat, "lon": p.lon}))
+        .collect();
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("saved".to_string(), serde_json::Value::Array(saved));
+    }
+    v.to_string()
 }
 
 #[cfg(test)]
@@ -31,6 +46,7 @@ mod tests {
     use crate::sample;
     use weathertrack_core::Location;
     use weathertrack_core::place::{Place, PlaceChoice, PlaceSource};
+    use weathertrack_core::saved::SavedPlaces;
     use weathertrack_core::web::Action;
 
     struct NoGeo;
@@ -44,6 +60,7 @@ mod tests {
         let ctx = Context {
             current: Place::new(46.77, 23.6, "Cluj-Napoca").expect("valid"),
             source: PlaceSource::Network,
+            saved: SavedPlaces::new(),
         };
         route(
             &Request::new(method, uri, body),
@@ -89,6 +106,30 @@ mod tests {
             ask(Method::Post, "/auto", "").action,
             Some(Action::Choose(PlaceChoice::Auto))
         );
+    }
+
+    #[test]
+    fn saved_places_are_in_the_json() {
+        let v: serde_json::Value =
+            serde_json::from_str(&ask(Method::Get, "/api/weather.json", "").html).expect("json");
+        assert_eq!(
+            v["saved"],
+            serde_json::json!([]),
+            "an empty list is still present"
+        );
+        let ctx = Context {
+            current: Place::new(1.0, 2.0, "A").expect("valid"),
+            source: PlaceSource::Network,
+            saved: SavedPlaces::decode("48.78|9.18|Stuttgart"),
+        };
+        let r = route(
+            &Request::new(Method::Get, "/api/weather.json", ""),
+            &ctx,
+            &NoGeo,
+            &ViewModel::from_model(&sample::model(false), 24),
+        );
+        let v: serde_json::Value = serde_json::from_str(&r.html).expect("json");
+        assert_eq!(v["saved"][0]["name"], "Stuttgart");
     }
 
     #[test]

@@ -23,7 +23,12 @@ pub struct ConfigDefaults {
 }
 
 pub fn read(nvs: &EspNvs<NvsDefault>, key: &str) -> Option<String> {
-    let mut buf = [0u8; 128];
+    read_up_to(nvs, key, 128)
+}
+
+/// Like [`read`] for longer values (up to `max` bytes), such as the list of saved places.
+pub fn read_up_to(nvs: &EspNvs<NvsDefault>, key: &str, max: usize) -> Option<String> {
+    let mut buf = vec![0u8; max];
     nvs.get_str(key, &mut buf)
         .ok()
         .flatten()

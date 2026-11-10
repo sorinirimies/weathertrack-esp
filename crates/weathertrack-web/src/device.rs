@@ -5,6 +5,7 @@
 
 use serde_json::Value;
 use weathertrack_core::place::{Place, PlaceChoice, PlaceSource};
+use weathertrack_core::saved::SavedPlaces;
 use weathertrack_core::sync::DeviceChoice;
 use weathertrack_core::web::url_encode;
 
@@ -21,6 +22,8 @@ pub struct DeviceStatus {
     pub temperature: Option<String>,
     pub condition: Option<String>,
     pub updated: Option<String>,
+    /// The device's list of saved places (None for firmware that does not report one).
+    pub saved: Option<SavedPlaces>,
 }
 
 impl DeviceStatus {
@@ -81,6 +84,19 @@ pub fn parse_status(body: &[u8]) -> Result<DeviceStatus, String> {
         temperature: text(&["current", "temperature"]),
         condition: text(&["current", "condition"]),
         updated: text(&["current", "updated"]),
+        saved: v.get("saved").and_then(Value::as_array).map(|a| {
+            let mut list = SavedPlaces::new();
+            for e in a {
+                if let Some(p) = e["lat"]
+                    .as_f64()
+                    .zip(e["lon"].as_f64())
+                    .and_then(|(la, lo)| Place::new(la, lo, e["name"].as_str().unwrap_or("")))
+                {
+                    let _ = list.add(p);
+                }
+            }
+            list
+        }),
     })
 }
 
@@ -101,6 +117,15 @@ pub fn push_choice(net: &dyn Net, base: &str, choice: &PlaceChoice) -> Result<()
         }
         PlaceChoice::Auto => net.post_form(&format!("{base}/auto"), ""),
     }
+    .map(|_| ())
+}
+
+/// Replace a device's list of saved places.
+pub fn push_saved(net: &dyn Net, base: &str, list: &SavedPlaces) -> Result<(), String> {
+    net.post_form(
+        &format!("{base}/saved"),
+        &format!("list={}", url_encode(&list.encode())),
+    )
     .map(|_| ())
 }
 
@@ -196,6 +221,45 @@ mod tests {
         assert_eq!(get("last-known").choice, PlaceChoice::Auto);
         assert!(get("pinned").pinned);
         assert!(!get("searched").pinned);
+    }
+
+    #[test]
+    fn the_saved_list_is_read_when_the_device_reports_one() {
+        let with = r#"{"place":{"name":"X","lat":1.0,"lon":2.0,"kind":"searched"},"saved":[{"name":"Stuttgart","lat":48.78,"lon":9.18},{"name":"bad","lat":999,"lon":0}]}"#;
+        let s = parse_status(with.as_bytes()).expect("ok");
+        assert_eq!(
+            s.saved
+                .expect("a list")
+                .places()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Stuttgart"]
+        );
+        assert_eq!(
+            parse_status(NEW.as_bytes()).expect("ok").saved,
+            None,
+            "older firmware: no list, not synced"
+        );
+    }
+
+    #[test]
+    fn pushing_the_list_posts_it_url_encoded() {
+        let net = Fake::default();
+        push_saved(
+            &net,
+            "http://c6",
+            &SavedPlaces::decode("48.78|9.18|Bad Rappenau"),
+        )
+        .expect("ok");
+        let posted = net.posted.lock().expect("lock").clone();
+        assert_eq!(
+            posted[0],
+            (
+                "http://c6/saved".to_string(),
+                "list=48.78%7C9.18%7CBad%20Rappenau".to_string()
+            )
+        );
     }
 
     #[test]

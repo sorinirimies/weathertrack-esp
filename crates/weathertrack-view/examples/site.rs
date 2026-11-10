@@ -33,6 +33,9 @@ fn main() {
     let ctx = Context {
         current: Place::new(46.77, 23.6, "Cluj-Napoca").expect("valid"),
         source: PlaceSource::Network,
+        saved: weathertrack_core::saved::SavedPlaces::decode(
+            "48.78232|9.17702|Stuttgart\n52.52|13.405|Berlin\n46.77|23.6|Cluj-Napoca",
+        ),
     };
     for (file, uri) in [
         ("weather.html", "/"),

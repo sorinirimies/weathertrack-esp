@@ -3,10 +3,14 @@
 
 use esp_idf_svc::nvs::{EspNvs, NvsDefault};
 use weathertrack_core::place::{Place, PlaceChoice, PlaceSource, choose_place};
+use weathertrack_core::saved::SavedPlaces;
 
 use crate::{net, nvs};
 
 const KEY: &str = "place";
+const SAVED_KEY: &str = "saved";
+/// 8 places of up to ~90 bytes each.
+const SAVED_MAX: usize = 1024;
 
 /// The place the user chose last time (`Auto` when nothing valid is stored).
 pub fn load_choice(store: &EspNvs<NvsDefault>) -> PlaceChoice {
@@ -15,6 +19,16 @@ pub fn load_choice(store: &EspNvs<NvsDefault>) -> PlaceChoice {
 
 pub fn save_choice(store: &mut EspNvs<NvsDefault>, choice: &PlaceChoice) {
     nvs::write(store, KEY, &choice.encode());
+}
+
+/// The places kept in the list (empty when nothing is stored).
+pub fn load_saved(store: &EspNvs<NvsDefault>) -> SavedPlaces {
+    nvs::read_up_to(store, SAVED_KEY, SAVED_MAX).map_or_else(SavedPlaces::new, |s| SavedPlaces::decode(&s))
+}
+
+/// Store the list; an empty list is stored as empty, so a removal is a removal in flash too.
+pub fn save_saved(store: &mut EspNvs<NvsDefault>, saved: &SavedPlaces) {
+    nvs::write(store, SAVED_KEY, &saved.encode());
 }
 
 /// Where this device is, from the network (IP geolocation); `None` if the lookup fails.

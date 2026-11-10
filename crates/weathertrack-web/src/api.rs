@@ -56,6 +56,7 @@ async fn state(cx: &Cx) -> Result<Json<Value>> {
         "master": master,
         "place": snap.place.as_ref().map(|p| &p.name),
         "sync": snap.sync,
+        "saved": snap.saved.places().iter().map(|p| json!({"name": p.name, "lat": p.lat, "lon": p.lon})).collect::<Vec<_>>(),
         "devices": devices,
     })))
 }

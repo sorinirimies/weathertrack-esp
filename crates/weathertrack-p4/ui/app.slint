@@ -89,6 +89,13 @@ export component WeatherApp inherits Window {
     callback search(string);
     callback choose(int);
     callback use-network();
+    in property <[PlaceResult]> saved;
+    in-out property <bool> searching: false;
+    in property <int> selected: -1;
+    in property <bool> can-save: true;
+    callback save-current();
+    callback forget(int);
+    callback choose-saved(int);
 
     in-out property <int> tab: 0;
     property <length> swipe-from: 0px;
@@ -243,6 +250,13 @@ export component WeatherApp inherits Window {
             search(q) => { root.search(q); }
             choose(i) => { root.choose(i); }
             use-network => { root.use-network(); }
+            saved: root.saved;
+            searching <=> root.searching;
+            selected: root.selected;
+            can-save: root.can-save;
+            save-current => { root.save-current(); }
+            forget(i) => { root.forget(i); }
+            choose-saved(i) => { root.choose-saved(i); }
         }
         if root.tab == 5: AlertsPage { alerts: root.alerts; }
 
