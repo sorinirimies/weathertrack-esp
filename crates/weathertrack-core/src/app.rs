@@ -2,9 +2,10 @@
 //!
 //! Shared between TUI and GUI crates.
 
-use crate::{wmo::generate_alerts_from_conditions, Forecast, WeatherAlert};
+use crate::{Forecast, WeatherAlert, wmo::generate_alerts_from_conditions};
 
 /// Application state.
+#[derive(Debug)]
 pub struct Model {
     pub page: usize,
     pub forecast: Option<Forecast>,
@@ -39,6 +40,7 @@ impl Model {
 }
 
 /// Events that modify application state.
+#[derive(Debug)]
 pub enum Msg {
     NextPage,
     WeatherLoaded(Box<Forecast>),
