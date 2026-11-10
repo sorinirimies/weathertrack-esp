@@ -65,6 +65,7 @@ pub struct HourView {
     pub tag: String,
     pub temp: String,
     pub temp_val: f32,
+    pub feels_val: f32,
     pub rain_pct: i32,
     pub wind: String,
 }
@@ -330,6 +331,7 @@ fn hour_view(h: &HourlyForecast) -> HourView {
         tag: tag(&h.condition).into(),
         temp: format!("{:.0}", h.temperature),
         temp_val: h.temperature as f32,
+        feels_val: h.feels_like as f32,
         rain_pct: pct(h.precipitation_probability),
         wind: format!("{:.0}", h.wind_speed),
     }

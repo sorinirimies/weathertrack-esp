@@ -3,11 +3,16 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
-use weathertrack_view::{AlertView, CurrentView, DayView, ViewModel};
+use weathertrack_view::{AlertView, CurrentView, ViewModel};
 
 use crate::glyphs::{art, big, big_width};
-use crate::widgets::{area_chart, frame, gauge, put, put_center, put_right, width};
+use crate::widgets::{frame, gauge, put, put_center, put_right, width};
 use crate::{Density, TABS, UiState, theme};
+use ratatui::widgets::Widget;
+use tui_chart::{
+    Axis, Gauge, GaugeStyle, LegendPosition, LineChart, LineMode, LollipopChart, LollipopItem,
+    Marker, Series, Sparkline,
+};
 
 pub const HEADER_ROWS: u16 = 2;
 pub const TAB_BAR_ROWS: u16 = 3;
@@ -36,7 +41,7 @@ pub fn screen(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
         (Some(c), 0) => now(body, buf, vm, c, density),
         (Some(_), 1) => hourly(body, buf, vm, density),
         (Some(_), 2) => week(body, buf, vm, density),
-        (Some(c), 3) => details(body, buf, c, density),
+        (Some(c), 3) => details(body, buf, vm, c, density),
         (Some(_), _) => alerts(body, buf, &vm.alerts, density),
     }
     let foot_area = Rect::new(
@@ -506,177 +511,147 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
 // ── Hourly ──────────────────────────────────────────────────────────────────
 
 fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
-    let area = if d == Density::Wide {
+    let wide = d == Density::Wide;
+    let area = if wide {
         frame(buf, body, "Temperature - next 24 hours", theme::BORDER)
     } else {
         body
     };
-    let n = vm.hours.len();
-    if n == 0 {
+    if vm.hours.is_empty() || area.height < 8 {
         return;
     }
-    let pad = if d == Density::Wide { 3 } else { 1 };
-    let chart_w = area.width.saturating_sub(pad * 2);
-    let labels = 4; // time, temp, tag, rain
-    let top = if d == Density::Wide { 1 } else { 0 };
-    let chart_h = area.height.saturating_sub(labels + top + 2);
     put(
         buf,
         area,
-        area.left() + pad,
-        area.top() + top,
+        area.left() + 1,
+        area.top(),
         &format!("min {:.0}°   max {:.0}°", vm.hourly_min, vm.hourly_max),
         theme::muted(),
     );
-    let chart = Rect::new(area.left() + pad, area.top() + top + 1, chart_w, chart_h);
-    let values: Vec<f32> = vm.hours.iter().map(|h| h.temp_val).collect();
-    area_chart(buf, chart, &values, theme::ACCENT);
 
-    // A label every 3 hours, starting under its point (the last one is pulled back inside).
-    let y0 = chart.bottom() + 1;
-    for (i, h) in vm.hours.iter().enumerate().filter(|(i, _)| i % 3 == 0) {
-        let x = chart.left() + (i as u16 * chart_w.saturating_sub(1)) / (n as u16 - 1).max(1);
-        let x = x.min(chart.right().saturating_sub(5));
-        put(buf, area, x, y0, &h.time, theme::muted());
-        put(
-            buf,
-            area,
-            x,
-            y0 + 1,
-            &format!("{}°", h.temp),
-            theme::bold(theme::temp_color(h.temp_val)),
-        );
-        put(
-            buf,
-            area,
-            x,
-            y0 + 2,
-            &h.tag,
-            theme::on_bg(art_color(&h.tag, true)),
-        );
-        put(
-            buf,
-            area,
-            x,
-            y0 + 3,
-            &format!("{}%", h.rain_pct),
-            theme::on_bg(theme::RAIN),
-        );
+    // Rain chance as a sparkline under the temperature chart.
+    let rain_h: u16 = if wide { 4 } else { 3 };
+    let chart_area = Rect::new(
+        area.left(),
+        area.top() + 1,
+        area.width,
+        area.height - 1 - rain_h,
+    );
+    let rain_area = Rect::new(
+        area.left() + 6,
+        area.bottom() - rain_h + 1,
+        area.width.saturating_sub(7),
+        rain_h - 1,
+    );
+
+    let n = vm.hours.len();
+    let series = |name: &str, f: fn(&weathertrack_view::HourView) -> f32, color| {
+        Series::new(name)
+            .data(
+                vm.hours
+                    .iter()
+                    .enumerate()
+                    .map(|(i, h)| (i as f64, f64::from(f(h)))),
+            )
+            .color(color)
+    };
+    let mut lines = vec![series("Temp", |h| h.temp_val, theme::ACCENT)];
+    if wide {
+        lines.push(series("Feels like", |h| h.feels_val, theme::WARM));
     }
+    let labels: Vec<String> = vm.hours.iter().step_by(4).map(|h| h.time.clone()).collect();
+    let chart = LineChart::new(lines)
+        // Wide: smooth braille lines (two series). Compact: a half-block line, which stays readable
+        // in the 6x10 font where single braille dots are faint.
+        .mode(LineMode::Line)
+        .marker(if wide {
+            Marker::Braille
+        } else {
+            Marker::HalfBlock
+        })
+        .smooth(true)
+        .x_axis(
+            Axis::new()
+                .bounds(0.0, (n - 1) as f64)
+                .labels(labels)
+                .label_style(theme::muted())
+                .grid(false),
+        )
+        .y_axis(
+            Axis::new()
+                .ticks(if wide { 5 } else { 3 })
+                .label_style(theme::muted())
+                .grid_style(theme::on_bg(theme::BORDER))
+                .formatter(|v| format!("{v:.0}°"))
+                .grid(true),
+        )
+        .legend(if wide {
+            LegendPosition::TopRight
+        } else {
+            LegendPosition::None
+        });
+    (&chart).render(chart_area, buf);
+
+    put(
+        buf,
+        area,
+        area.left() + 1,
+        rain_area.top(),
+        "Rain",
+        theme::on_bg(theme::RAIN),
+    );
+    // The sparkline draws one column per value: resample the hours to the plot width.
+    let cols = usize::from(rain_area.width).max(2);
+    let rain_data = (0..cols).map(|x| f64::from(vm.hours[x * (n - 1) / (cols - 1)].rain_pct));
+    let rain = Sparkline::new(rain_data).gradient([theme::FAINT, theme::RAIN]);
+    (&rain).render(rain_area, buf);
 }
 
 // ── 7 days ──────────────────────────────────────────────────────────────────
 
 fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
-    let area = if d == Density::Wide {
-        frame(buf, body, "7-day forecast", theme::BORDER)
+    let wide = d == Density::Wide;
+    let area = if wide {
+        frame(buf, body, "7-day forecast (low to high)", theme::BORDER)
     } else {
         body
     };
-    let wide = d == Density::Wide;
-    let (bar_w, left_pad) = if wide { (40u16, 3u16) } else { (18, 1) };
-    let x0 = area.left() + left_pad;
-    let head_rows = 1u16;
-    put(
-        buf,
-        area,
-        x0,
-        area.top(),
-        "Day    Sky  Lo/Hi",
-        theme::faint(),
-    );
-    let span = (vm.week_max - vm.week_min).max(1.0);
-    let step = (area.height.saturating_sub(head_rows + 1) / 7).clamp(1, 3);
-    for (i, day) in vm.days.iter().take(7).enumerate() {
-        let y = area.top() + head_rows + i as u16 * step;
-        if y >= area.bottom() {
-            break;
-        }
+    if vm.days.is_empty() {
+        return;
+    }
+    // Everything about a day sits in its row label, so the rows always line up with the dumbbells.
+    let items = vm.days.iter().take(7).enumerate().map(|(i, day)| {
         let name = if i == 0 {
             "Today"
         } else {
             day.weekday.as_str()
         };
-        put(buf, area, x0, y, name, theme::bold(theme::TEXT));
-        put(
-            buf,
-            area,
-            x0 + 7,
-            y,
-            &day.tag,
-            theme::on_bg(art_color(&day.tag, true)),
-        );
-        put(
-            buf,
-            area,
-            x0 + 12,
-            y,
-            &format!(
-                "{:>3}/{:<3}",
-                format!("{}°", day.low),
-                format!("{}°", day.high)
-            ),
-            theme::muted(),
-        );
-        let bx = x0 + 21;
-        range_bar(buf, area, (bx, y, bar_w), day, (vm.week_min, span));
-        let rx = bx + bar_w + 2;
-        put(
-            buf,
-            area,
-            rx,
-            y,
-            &format!("{:>3}%", day.rain_pct),
-            theme::on_bg(if day.rain_pct >= 50 {
-                theme::RAIN
-            } else {
-                theme::FAINT
-            }),
-        );
-        put(
-            buf,
-            area,
-            rx + 5,
-            y,
-            &format!("UV{:.0}", day.uv),
-            theme::on_bg(theme::uv_color(day.uv)),
-        );
-        if wide {
-            put(buf, area, rx + 11, y, &day.condition, theme::muted());
-        }
-    }
-}
-
-fn range_bar(buf: &mut Buffer, area: Rect, at: (u16, u16, u16), day: &DayView, scale: (f32, f32)) {
-    let (x, y, w) = at;
-    let (min, span) = scale;
-    put(
-        buf,
-        area,
-        x,
-        y,
-        &"░".repeat(usize::from(w)),
-        theme::on_bg(theme::BORDER),
-    );
-    let a = (((day.low_val - min) / span) * f32::from(w))
-        .floor()
-        .clamp(0.0, f32::from(w - 1)) as u16;
-    let b = (((day.high_val - min) / span) * f32::from(w))
-        .ceil()
-        .clamp(f32::from(a + 1), f32::from(w)) as u16;
-    put(
-        buf,
-        area,
-        x + a,
-        y,
-        &"█".repeat(usize::from(b - a)),
-        theme::on_bg(theme::temp_color(day.high_val)),
-    );
+        let label = if wide {
+            format!(
+                "{name:<5} {} {:<8} {:>3}% UV{:.0}",
+                day.tag,
+                format!("{:.0}°/{:.0}°", day.low_val, day.high_val),
+                day.rain_pct,
+                day.uv
+            )
+        } else {
+            format!("{name:<5} {} {:>3}%", day.tag, day.rain_pct)
+        };
+        // Whole degrees: the chart prints the value next to the head.
+        LollipopItem::new(label, f64::from(day.high_val.round()))
+            .from(f64::from(day.low_val.round()))
+            .color(theme::temp_color(day.high_val))
+    });
+    let chart = LollipopChart::new(items)
+        .sorted(false)
+        .show_values(true)
+        .head('●');
+    (&chart).render(area, buf);
 }
 
 // ── Details ─────────────────────────────────────────────────────────────────
 
-fn details(body: Rect, buf: &mut Buffer, c: &CurrentView, d: Density) {
+fn details(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView, d: Density) {
     let (cols, rows) = if d == Density::Wide {
         (3u16, 2u16)
     } else {
@@ -708,7 +683,11 @@ fn details(body: Rect, buf: &mut Buffer, c: &CurrentView, d: Density) {
                 cell.height.saturating_sub(1),
             )
         };
-        detail_card(buf, inner, usize::from(idx), c, d == Density::Wide);
+        if d == Density::Wide {
+            wide_card(buf, inner, usize::from(idx), vm, c);
+        } else {
+            detail_card(buf, inner, usize::from(idx), c, false);
+        }
     }
 }
 
@@ -1021,4 +1000,173 @@ pub(crate) fn wrap(text: &str, width: usize, max_lines: usize) -> Vec<String> {
         }
     }
     lines
+}
+
+/// One tui-chart gauge in `area` with a centred label.
+fn dial(
+    buf: &mut Buffer,
+    area: Rect,
+    style: GaugeStyle,
+    value: f64,
+    range: (f64, f64),
+    bands: &[(f64, Color)],
+    label: String,
+) {
+    let g = Gauge::new(value)
+        .style(style)
+        .range(range.0, range.1)
+        .bands(bands.iter().copied())
+        .label(label);
+    (&g).render(area, buf);
+}
+
+/// The wide Details cards: a gauge widget from tui-chart per quantity, one line of text under it.
+fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentView) {
+    if r.height < 4 {
+        return;
+    }
+    let text_y = r.bottom() - 1;
+    let gauge_area = Rect::new(r.left(), r.top(), r.width, r.height - 1);
+    let x = r.left() + 1;
+    match idx {
+        0 => {
+            dial(
+                buf,
+                Rect::new(r.left() + 1, r.top() + 3, r.width - 2, 3),
+                GaugeStyle::Smooth,
+                f64::from(c.sun_progress),
+                (0.0, 1.0),
+                &[(1.0, theme::WARM)],
+                c.daylight.clone(),
+            );
+            put(
+                buf,
+                r,
+                x,
+                r.top(),
+                &format!("Sunrise {}    Sunset {}", c.sunrise, c.sunset),
+                theme::bold(theme::TEXT),
+            );
+            put(buf, r, x, text_y, "Sun position today", theme::faint());
+        }
+        1 => {
+            let bands = [
+                (20.0, theme::GOOD),
+                (40.0, theme::WARM),
+                (100.0, Color::Rgb(239, 68, 68)),
+            ];
+            dial(
+                buf,
+                gauge_area,
+                GaugeStyle::Dial,
+                f64::from(c.wind_speed.parse::<f32>().unwrap_or(0.0)),
+                (0.0, 60.0),
+                &bands,
+                format!("{} km/h {}", c.wind_speed, c.wind_dir),
+            );
+            put(
+                buf,
+                r,
+                x,
+                text_y,
+                &format!("Gusts {} km/h", c.gusts),
+                theme::muted(),
+            );
+        }
+        2 => {
+            dial(
+                buf,
+                gauge_area,
+                GaugeStyle::Ring,
+                f64::from(c.humidity),
+                (0.0, 100.0),
+                &[(100.0, theme::RAIN)],
+                format!("{:.0}%", c.humidity),
+            );
+            put(
+                buf,
+                r,
+                x,
+                text_y,
+                &format!(
+                    "{} - cloud {:.0}%",
+                    weathertrack_view::humidity_label(f64::from(c.humidity)),
+                    c.cloud
+                ),
+                theme::muted(),
+            );
+        }
+        3 => {
+            let bands = [
+                (3.0, theme::uv_color(1.0)),
+                (6.0, theme::uv_color(4.0)),
+                (8.0, theme::uv_color(7.0)),
+                (11.0, theme::uv_color(9.0)),
+                (15.0, theme::uv_color(12.0)),
+            ];
+            dial(
+                buf,
+                Rect::new(r.left() + 1, r.top() + 2, r.width - 2, 4),
+                GaugeStyle::Segmented,
+                f64::from(c.uv),
+                (0.0, 11.0),
+                &bands,
+                format!("{:.0} {}", c.uv, c.uv_label),
+            );
+            put(buf, r, x, text_y, "UV index 0 - 11+", theme::faint());
+        }
+        4 => {
+            let bands = [
+                (1000.0, theme::MUTED),
+                (1020.0, theme::ACCENT),
+                (1040.0, theme::WARM),
+            ];
+            dial(
+                buf,
+                gauge_area,
+                GaugeStyle::Arc,
+                f64::from(c.pressure.parse::<f32>().unwrap_or(1013.0)),
+                (970.0, 1040.0),
+                &bands,
+                format!("{} hPa", c.pressure),
+            );
+            put(buf, r, x, text_y, &c.pressure_label, theme::muted());
+        }
+        _ => {
+            put(
+                buf,
+                r,
+                x,
+                r.top(),
+                &format!("{} mm now", c.precip),
+                theme::bold(theme::TEXT),
+            );
+            put(
+                buf,
+                r,
+                x,
+                r.top() + 1,
+                &format!("rain {} mm   snow {} cm", c.rain, c.snow),
+                theme::muted(),
+            );
+            let w = usize::from(r.width.saturating_sub(2)).max(2);
+            if !vm.hours.is_empty() {
+                let n = vm.hours.len();
+                let data = (0..w).map(|i| f64::from(vm.hours[i * (n - 1) / (w - 1)].rain_pct));
+                let spark = Sparkline::new(data).gradient([theme::FAINT, theme::RAIN]);
+                (&spark).render(
+                    Rect::new(x, r.top() + 3, r.width - 2, r.height.saturating_sub(5)),
+                    buf,
+                );
+            }
+            put(
+                buf,
+                r,
+                x,
+                text_y,
+                &format!("Rain chance, next {} h", vm.hours.len()),
+                theme::faint(),
+            );
+        }
+    }
 }

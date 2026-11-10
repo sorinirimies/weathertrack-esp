@@ -94,50 +94,6 @@ pub fn gauge(buf: &mut Buffer, area: Rect, x: u16, y: u16, width: u16, frac: f32
     );
 }
 
-/// A temperature area chart: half-block resolution columns under a curve.
-///
-/// `values` are spread over the width; the value range is padded by a degree.
-pub fn area_chart(buf: &mut Buffer, area: Rect, values: &[f32], color: Color) {
-    if values.is_empty() || area.width < 2 || area.height < 2 {
-        return;
-    }
-    let lo = values.iter().copied().fold(f32::MAX, f32::min).floor() - 1.0;
-    let hi = values.iter().copied().fold(f32::MIN, f32::max).ceil() + 1.0;
-    let span = (hi - lo).max(1.0);
-    let half_rows = usize::from(area.height) * 2;
-    for col in 0..area.width {
-        // linear interpolation across the samples
-        let pos = if values.len() == 1 {
-            0.0
-        } else {
-            f32::from(col) * (values.len() - 1) as f32 / f32::from(area.width - 1)
-        };
-        let i = pos.floor() as usize;
-        let j = (i + 1).min(values.len() - 1);
-        let v = values[i] + (values[j] - values[i]) * (pos - i as f32);
-        let level = (((v - lo) / span) * half_rows as f32)
-            .round()
-            .clamp(1.0, half_rows as f32) as usize;
-        for row in 0..area.height {
-            // row 0 is the top; the cell covers half-levels [2*(h-1-row), 2*(h-1-row)+2)
-            let base = 2 * usize::from(area.height - 1 - row);
-            let glyph = if level >= base + 2 {
-                "█"
-            } else if level == base + 1 {
-                "▄"
-            } else {
-                continue;
-            };
-            buf.set_string(
-                area.left() + col,
-                area.top() + row,
-                glyph,
-                theme::on_bg(color),
-            );
-        }
-    }
-}
-
 /// Text-width helper.
 pub fn width(s: &str) -> u16 {
     s.chars().count() as u16
