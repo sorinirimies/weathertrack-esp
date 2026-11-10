@@ -4,5 +4,7 @@
 pub mod led;
 pub mod net;
 pub mod nvs;
+pub mod place;
 pub mod sd;
+pub mod webconfig;
 pub mod wifi;

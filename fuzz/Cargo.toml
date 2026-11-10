@@ -52,3 +52,10 @@ path = "fuzz_targets/render_tui.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "place_web"
+path = "fuzz_targets/place_web.rs"
+test = false
+doc = false
+bench = false

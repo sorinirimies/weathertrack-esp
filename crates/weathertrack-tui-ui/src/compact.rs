@@ -16,7 +16,9 @@ use crate::widgets::{gauge, put, put_center, put_right};
 use crate::{UiState, theme};
 
 /// Page names, in order; the dots at the bottom follow this.
-pub const PAGES: [&str; 7] = ["Now", "Hourly", "Week", "Wind", "Air", "Sun", "Alerts"];
+pub const PAGES: [&str; 8] = [
+    "Now", "Hourly", "Week", "Wind", "Air", "Sun", "Place", "Alerts",
+];
 
 pub fn screen(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     let body = Rect::new(
@@ -27,6 +29,19 @@ pub fn screen(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     );
     header(Rect::new(area.x, area.y, area.width, 1), buf, vm, state);
     let page = state.tab % PAGES.len();
+    // the place page does not need a forecast: it is how you fix a wrong place
+    if page == 6 {
+        place(body, buf, vm);
+        header(Rect::new(area.x, area.y, area.width, 1), buf, vm, state);
+        footer(
+            Rect::new(area.x, area.bottom().saturating_sub(1), area.width, 1),
+            buf,
+            vm,
+            state,
+            page,
+        );
+        return;
+    }
     match (&vm.current, page) {
         (None, _) => put_center(
             buf,
@@ -81,7 +96,7 @@ fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     );
 }
 
-/// "● ○ ○ ○ ○ ○ ○" and the page name; the theme name on the right when it fits.
+/// "●○○○○○○○" and the page name; the theme name on the right when it fits.
 fn footer(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, page: usize) {
     let mut x = area.left() + 1;
     for i in 0..PAGES.len() {
@@ -102,7 +117,7 @@ fn footer(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, page: u
             if on { "●" } else { "○" },
             theme::on_bg(color),
         );
-        x += 2;
+        x += 1;
     }
     put(
         buf,
@@ -449,6 +464,45 @@ fn stats(body: Rect, buf: &mut Buffer, left: Stat, right: Stat) {
         if let Some((frac, color)) = s.gauge {
             gauge(buf, body, x, body.top() + 8, w, frac, color);
         }
+    }
+}
+
+// ── Place ───────────────────────────────────────────────────────────────────
+
+/// The place in use, where it came from, and how to change it from a phone.
+fn place(body: Rect, buf: &mut Buffer, vm: &ViewModel) {
+    let (l, t) = (body.left() + 1, body.top());
+    put(buf, body, l, t, "YOUR PLACE", theme::bold(theme::c_muted()));
+    put(
+        buf,
+        body,
+        l,
+        t + 2,
+        &vm.place.name,
+        theme::bold(theme::c_text()),
+    );
+    put(buf, body, l, t + 3, &vm.place.coordinates, theme::muted());
+    put(buf, body, l, t + 4, &vm.place.source, theme::faint());
+    put(
+        buf,
+        body,
+        l,
+        t + 6,
+        "Change it from a phone:",
+        theme::muted(),
+    );
+    if vm.place.url.is_empty() {
+        put(buf, body, l, t + 7, "waiting for WiFi...", theme::faint());
+    } else {
+        put(
+            buf,
+            body,
+            l,
+            t + 7,
+            &vm.place.url,
+            theme::bold(theme::c_accent()),
+        );
+        put(buf, body, l, t + 8, "(same WiFi network)", theme::faint());
     }
 }
 

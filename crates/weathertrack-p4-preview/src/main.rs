@@ -64,9 +64,16 @@ fn main() {
     );
     app.set_loading(false);
     app.set_offline(std::env::var("OFFLINE").is_ok());
-    for (i, n) in ["1-today", "2-hourly", "3-week", "4-details", "5-alerts"]
-        .iter()
-        .enumerate()
+    for (i, n) in [
+        "1-today",
+        "2-hourly",
+        "3-week",
+        "4-details",
+        "5-place",
+        "6-alerts",
+    ]
+    .iter()
+    .enumerate()
     {
         app.set_tab(i as i32);
         shot(n);

@@ -5,15 +5,16 @@ import "fonts/NotoSans-Regular.ttf";
 import "fonts/NotoSans-Bold.ttf";
 
 import { Theme } from "theme.slint";
-import { CurrentData, HourData, DayData, AlertData } from "types.slint";
+import { CurrentData, HourData, DayData, AlertData, PlaceData } from "types.slint";
 import { NowPage } from "pages/now.slint";
 import { HoursPage } from "pages/hours.slint";
 import { HourlyPage } from "pages/hourly.slint";
 import { WeekPage } from "pages/week.slint";
 import { StatsPage } from "pages/stats.slint";
+import { PlacePage } from "pages/place.slint";
 import { AlertsPage } from "pages/alerts.slint";
 
-export { CurrentData, HourData, DayData, AlertData }
+export { CurrentData, HourData, DayData, AlertData, PlaceData }
 
 export component WeatherApp inherits Window {
     in property <bool> loading: true;
@@ -21,6 +22,7 @@ export component WeatherApp inherits Window {
     in property <float> loading-progress: 0;
 
     in property <CurrentData> current;
+    in property <PlaceData> place;
     in property <[HourData]> hours;
     in property <[DayData]> days;
     in property <[AlertData]> alerts;
@@ -35,9 +37,10 @@ export component WeatherApp inherits Window {
     in property <bool> offline: false;
     in property <bool> refreshing: false;
     // Pages: 0 now, 1 next hours, 2 24 h chart, 3 week, 4 wind + humidity, 5 UV + pressure,
-    // 6 sun + precipitation, 7 alerts (only while there are alerts). One idea per page, big type.
+    // 6 sun + precipitation, 7 your place (and how to change it), 8 alerts (only while there are
+    // alerts). One idea per page, big type.
     in property <int> page: 0;
-    in property <int> page-count: 7;
+    in property <int> page-count: 8;
 
     width: 320px;
     height: 172px;
@@ -137,7 +140,8 @@ export component WeatherApp inherits Window {
         if root.page == 4: StatsPage { cur: root.current; kind: 0; }
         if root.page == 5: StatsPage { cur: root.current; kind: 1; }
         if root.page == 6: StatsPage { cur: root.current; kind: 2; }
-        if root.page == 7: AlertsPage { alerts: root.alerts; }
+        if root.page == 7: PlacePage { place: root.place; }
+        if root.page == 8: AlertsPage { alerts: root.alerts; }
     }
 
     // ── Page dots ────────────────────────────────────────────────
@@ -152,7 +156,7 @@ export component WeatherApp inherits Window {
             width: 8px;
             height: 8px;
             border-radius: 4px;
-            background: i == root.page ? (i == 7 ? Theme.warm : Theme.accent) : Theme.faint;
+            background: i == root.page ? (i == 8 ? Theme.warm : Theme.accent) : Theme.faint;
         }
         Text {
             x: parent.width - 8px - self.width;

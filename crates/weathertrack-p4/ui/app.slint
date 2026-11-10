@@ -5,14 +5,15 @@ import "fonts/NotoSans-Regular.ttf";
 import "fonts/NotoSans-Bold.ttf";
 
 import { Theme } from "theme.slint";
-import { CurrentData, HourData, DayData, AlertData } from "types.slint";
+import { CurrentData, HourData, DayData, AlertData, PlaceData } from "types.slint";
 import { TodayPage } from "pages/today.slint";
 import { HourlyPage } from "pages/hourly.slint";
 import { WeekPage } from "pages/week.slint";
 import { DetailsPage } from "pages/details.slint";
+import { PlacePage } from "pages/place.slint";
 import { AlertsPage } from "pages/alerts.slint";
 
-export { CurrentData, HourData, DayData, AlertData }
+export { CurrentData, HourData, DayData, AlertData, PlaceData }
 
 component TabButton inherits Rectangle {
     in property <string> label;
@@ -61,6 +62,7 @@ export component WeatherApp inherits Window {
     in property <float> loading-progress: 0;
 
     in property <CurrentData> current;
+    in property <PlaceData> place;
     in property <[HourData]> hours;
     in property <[DayData]> days;
     in property <[AlertData]> alerts;
@@ -219,7 +221,8 @@ export component WeatherApp inherits Window {
         }
         if root.tab == 2: WeekPage { days: root.days; week-min: root.week-min; week-max: root.week-max; }
         if root.tab == 3: DetailsPage { cur: root.current; arc: root.sun-arc; }
-        if root.tab == 4: AlertsPage { alerts: root.alerts; }
+        if root.tab == 4: PlacePage { place: root.place; }
+        if root.tab == 5: AlertsPage { alerts: root.alerts; }
 
         // Swipe left/right to change tab (the pages have no touch targets of their own).
         TouchArea {
@@ -227,7 +230,7 @@ export component WeatherApp inherits Window {
                 if (e.kind == PointerEventKind.down) {
                     root.swipe-from = self.mouse-x;
                 } else if (e.kind == PointerEventKind.up) {
-                    if (self.mouse-x - root.swipe-from < -120px && root.tab < 4) {
+                    if (self.mouse-x - root.swipe-from < -120px && root.tab < 5) {
                         root.tab += 1;
                     } else if (self.mouse-x - root.swipe-from > 120px && root.tab > 0) {
                         root.tab -= 1;
@@ -253,7 +256,8 @@ export component WeatherApp inherits Window {
             TabButton { label: "Hourly";  active: root.tab == 1; tapped => { root.tab = 1; } }
             TabButton { label: "7 Days";  active: root.tab == 2; tapped => { root.tab = 2; } }
             TabButton { label: "Details"; active: root.tab == 3; tapped => { root.tab = 3; } }
-            TabButton { label: "Alerts";  active: root.tab == 4; badge: root.alerts.length; tapped => { root.tab = 4; } }
+            TabButton { label: "Place";   active: root.tab == 4; tapped => { root.tab = 4; } }
+            TabButton { label: "Alerts";  active: root.tab == 5; badge: root.alerts.length; tapped => { root.tab = 5; } }
         }
     }
 }

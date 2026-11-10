@@ -2,7 +2,7 @@
 //!
 //! Shared between TUI and GUI crates.
 
-use crate::{Forecast, WeatherAlert, wmo::generate_alerts_from_conditions};
+use crate::{Forecast, WeatherAlert, place::PlaceSource, wmo::generate_alerts_from_conditions};
 
 /// Application state.
 #[derive(Debug)]
@@ -15,6 +15,10 @@ pub struct Model {
     pub lon: f64,
     pub error: Option<String>,
     pub dirty: bool,
+    /// Where `location` came from (network, search, config.toml).
+    pub place_source: PlaceSource,
+    /// Address of the device's "choose your place" web page, once it is up (`http://192.168.3.210/`).
+    pub config_url: Option<String>,
 }
 
 impl Model {
@@ -28,6 +32,8 @@ impl Model {
             lon,
             error: None,
             dirty: true,
+            place_source: PlaceSource::default(),
+            config_url: None,
         }
     }
 

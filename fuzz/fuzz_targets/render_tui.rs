@@ -18,11 +18,17 @@ fuzz_target!(|input: (String, String, u8, u8, u8, bool, bool)| {
     let vm = ViewModel::from_model(&model, HOURS);
     let area = Rect::new(0, 0, u16::from(w) % 160 + 1, u16::from(h) % 70 + 1);
     let mut buf = Buffer::empty(area);
-    let state = UiState { tab: usize::from(tab) % 5, offline, refreshing: !offline };
+    let state = UiState {
+        // any page index of either layout (8 compact pages), any theme
+        tab: usize::from(tab) % 8,
+        offline,
+        refreshing: !offline,
+        theme: usize::from(tab),
+    };
     render(area, &mut buf, &vm, &state);
     assert_eq!(buf.area, area);
     // taps anywhere resolve to a valid tab or nothing
     if let Some(t) = tab_at(area, area.width / 2, area.height.saturating_sub(1)) {
-        assert!(t < 5);
+        assert!(t < 6);
     }
 });

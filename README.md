@@ -41,7 +41,7 @@ The terminal UI draws its charts with [tui-chart](https://github.com/sorinirimie
 
 ### Made to be read from a distance (C6)
 
-The C6's 320×172 screen is small, so its UIs trade density for size: **nothing under 12 px, one idea per page, headline numbers 40–84 px**. Both UIs have seven pages (now, next hours, 24-hour chart, week, wind + humidity, UV + pressure, sun + rain) plus an alerts page, flipped with the BOOT button. The terminal UI uses a 9×15 font (35×11 cells) with block-letter digits.
+The C6's 320×172 screen is small, so its UIs trade density for size: **nothing under 12 px, one idea per page, headline numbers 40–84 px**. The Slint UI has nine pages (now, next hours, 24-hour chart, week, wind + humidity, UV + pressure, sun + rain, your place, alerts), the terminal UI eight (the next hours sit on the *now* page); the BOOT button flips through them. The terminal UI uses a 9×15 font (35×11 cells) with block-letter digits.
 
 | Slint · now | Slint · wind + humidity | Terminal · now | Terminal · wind + humidity |
 |---|---|---|---|
@@ -50,6 +50,20 @@ The C6's 320×172 screen is small, so its UIs trade density for size: **nothing 
 Terminal UI, 7 days on the C6:
 
 ![C6 TUI week](docs/screenshots/c6-tui-week.png)
+
+### Choosing the place
+
+By default every board looks up where it is from the network on boot (IP geolocation: city level, and an ISP's registered city can be tens of kilometres off). To pick the place yourself, no keyboard needed:
+
+1. Open the **Place** page on the device. It shows the place in use, where it came from, and an address like `http://192.168.3.210/`.
+2. Open that address on a phone or computer on the same WiFi, type a city and tap the right result (Open-Meteo geocoding, no key).
+3. The device switches at once and remembers the choice across reboots. **Use my network location** goes back to automatic.
+
+Order of precedence: a place pinned in `config.toml` (`[location] fixed = true`) beats your choice, which beats the network lookup, which beats the last known place. The page logic lives in `weathertrack-core` (`place`, `geocode`, `web`: pure, tested and fuzzed); each firmware only serves it.
+
+| P4 · Place (Slint) | C6 · Place (Slint) | C6 · Place (terminal) |
+|---|---|---|
+| ![P4 place](docs/screenshots/p4-slint-place.png) | ![C6 place](docs/screenshots/c6-slint-place.png) | ![C6 TUI place](docs/screenshots/c6-tui-place.png) |
 
 ### Themes
 

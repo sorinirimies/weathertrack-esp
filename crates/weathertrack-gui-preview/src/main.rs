@@ -70,9 +70,9 @@ fn main() {
     );
     app.set_loading(false);
     app.set_offline(std::env::var("OFFLINE").is_ok());
-    app.set_page_count(8);
+    app.set_page_count(9);
     for (i, n) in [
-        "1-now", "2-hours", "3-chart", "4-week", "5-wind", "6-uv", "7-sun", "8-alerts",
+        "1-now", "2-hours", "3-chart", "4-week", "5-wind", "6-uv", "7-sun", "8-place", "9-alerts",
     ]
     .iter()
     .enumerate()

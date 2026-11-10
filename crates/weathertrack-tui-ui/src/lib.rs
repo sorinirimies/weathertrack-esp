@@ -19,7 +19,7 @@ use weathertrack_view::ViewModel;
 pub use glyphs::{art, big, big_width};
 
 /// The pages of the wide layout, in order (the compact layout has its own, see [`page_names`]).
-pub const TABS: [&str; 5] = ["Today", "Hourly", "7 Days", "Details", "Alerts"];
+pub const TABS: [&str; 6] = ["Today", "Hourly", "7 Days", "Details", "Place", "Alerts"];
 /// Hourly entries the pages expect in [`ViewModel::hours`].
 pub const HOURS: usize = 24;
 
@@ -43,7 +43,7 @@ impl UiState {
     pub fn prev_tab(&mut self) {
         self.tab = (self.tab + TABS.len() - 1) % TABS.len();
     }
-    /// Next page for a screen of `area`: 5 wide pages or 7 compact ones (wraps around).
+    /// Next page for a screen of `area`: 6 wide pages or 8 compact ones (wraps around).
     pub fn next_page(&mut self, area: Rect) {
         self.tab = (self.tab + 1) % page_count(area);
     }
@@ -63,7 +63,7 @@ pub fn page_count(area: Rect) -> usize {
     page_names(area).len()
 }
 
-/// Names of the pages for a screen of `area`: the five tabs of the wide layout, or the seven big
+/// Names of the pages for a screen of `area`: the six tabs of the wide layout, or the eight big
 /// pages of the compact one.
 pub fn page_names(area: Rect) -> &'static [&'static str] {
     match Density::of(area) {
@@ -337,7 +337,7 @@ mod tests {
     fn taps_on_the_tab_bar_pick_the_tab_and_only_in_the_wide_layout() {
         let wide = Rect::new(0, 0, WIDE.0, WIDE.1);
         assert_eq!(tab_at(wide, 3, WIDE.1 - 2), Some(0));
-        assert_eq!(tab_at(wide, WIDE.0 - 2, WIDE.1 - 1), Some(4));
+        assert_eq!(tab_at(wide, WIDE.0 - 2, WIDE.1 - 1), Some(5));
         assert_eq!(tab_at(wide, 50, 5), None, "not on the tab bar");
         assert_eq!(tab_at(Rect::new(0, 0, COMPACT.0, COMPACT.1), 3, 16), None);
         assert!(refresh_at(wide, WIDE.0 - 3, 0));
@@ -456,8 +456,8 @@ mod tests {
     fn the_compact_layout_has_seven_big_pages_with_their_key_numbers() {
         let (w, h) = COMPACT;
         let area = Rect::new(0, 0, w, h);
-        assert_eq!(page_count(area), 7);
-        assert_eq!(page_count(Rect::new(0, 0, WIDE.0, WIDE.1)), 5);
+        assert_eq!(page_count(area), 8);
+        assert_eq!(page_count(Rect::new(0, 0, WIDE.0, WIDE.1)), 6);
         for (name, needles) in [
             ("Now", &["Clear", "°C", "Now"][..]),
             ("Hourly", &["Next 24 hours"][..]),
@@ -478,25 +478,64 @@ mod tests {
     }
 
     #[test]
+    fn the_place_page_shows_the_place_where_it_came_from_and_the_address() {
+        for (w, h) in [COMPACT, WIDE] {
+            let s = shot(w, h, page(w, h, "Place"), false, false);
+            for needle in [
+                "Cluj-Napoca",
+                "46.770, 23.600",
+                "from your network",
+                "http://192.168.3.210/",
+            ] {
+                assert!(s.contains(needle), "{needle} missing at {w}x{h}\n{s}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_place_page_works_before_any_forecast_and_before_wifi() {
+        for (w, h) in [COMPACT, WIDE] {
+            let area = Rect::new(0, 0, w, h);
+            let mut buf = Buffer::empty(area);
+            let mut vm = ViewModel::default();
+            vm.place.name = "Stuttgart".into();
+            render(
+                area,
+                &mut buf,
+                &vm,
+                &UiState {
+                    tab: page(w, h, "Place"),
+                    ..UiState::default()
+                },
+            );
+            let s = text(&buf);
+            assert!(
+                s.contains("Stuttgart") && s.contains("waiting for WiFi"),
+                "{w}x{h}\n{s}"
+            );
+        }
+    }
+
+    #[test]
     fn pages_wrap_by_screen_size() {
         let compact = Rect::new(0, 0, COMPACT.0, COMPACT.1);
         let wide = Rect::new(0, 0, WIDE.0, WIDE.1);
         let mut s = UiState {
-            tab: 6,
+            tab: 7,
             ..UiState::default()
         };
         s.next_page(compact);
         assert_eq!(s.tab, 0);
         s.prev_page(compact);
-        assert_eq!(s.tab, 6);
+        assert_eq!(s.tab, 7);
         let mut s = UiState {
-            tab: 4,
+            tab: 5,
             ..UiState::default()
         };
         s.next_page(wide);
         assert_eq!(s.tab, 0);
         s.prev_page(wide);
-        assert_eq!(s.tab, 4);
+        assert_eq!(s.tab, 5);
     }
 
     #[test]

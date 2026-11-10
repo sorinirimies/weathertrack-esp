@@ -100,10 +100,23 @@ pub struct AlertView {
     pub period: String,
 }
 
+/// The place in use and how to change it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PlaceView {
+    pub name: String,
+    /// "49.323, 9.104".
+    pub coordinates: String,
+    /// "from your network", "chosen by search", ...
+    pub source: String,
+    /// Address of the device's web page, empty until it is up.
+    pub url: String,
+}
+
 /// Everything a screen needs.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ViewModel {
     pub location: String,
+    pub place: PlaceView,
     pub current: Option<CurrentView>,
     /// The next hours, starting with the current one.
     pub hours: Vec<HourView>,
@@ -120,6 +133,12 @@ impl ViewModel {
     pub fn from_model(model: &Model, hours: usize) -> Self {
         let mut vm = Self {
             location: model.location.clone(),
+            place: PlaceView {
+                name: model.location.clone(),
+                coordinates: format!("{:.3}, {:.3}", model.lat, model.lon),
+                source: model.place_source.label().to_string(),
+                url: model.config_url.clone().unwrap_or_default(),
+            },
             alerts: model.alerts.iter().map(alert_view).collect(),
             week_max: 1.0,
             ..Self::default()
@@ -426,6 +445,24 @@ mod tests {
         assert!(vm.hourly_min < vm.hourly_max && vm.week_min < vm.week_max);
         assert_eq!(c.daylight, "9h 43m of daylight");
         assert_eq!(vm.is_day(), Some(true));
+    }
+
+    #[test]
+    fn the_place_view_names_the_source_and_the_page_address() {
+        let mut m = sample::model(false);
+        m.place_source = weathertrack_core::place::PlaceSource::Searched;
+        m.config_url = Some("http://192.168.3.210/".into());
+        let vm = ViewModel::from_model(&m, 4);
+        assert_eq!(vm.place.name, "Cluj-Napoca");
+        assert_eq!(vm.place.coordinates, "46.770, 23.600");
+        assert_eq!(vm.place.source, "chosen by search");
+        assert_eq!(vm.place.url, "http://192.168.3.210/");
+        let fresh = Model::new("X", 1.0, 2.0);
+        assert_eq!(
+            ViewModel::from_model(&fresh, 4).place.url,
+            "",
+            "no address until the page is up"
+        );
     }
 
     #[test]

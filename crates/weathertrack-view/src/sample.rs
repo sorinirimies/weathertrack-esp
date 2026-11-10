@@ -95,6 +95,7 @@ pub fn model(alerts: bool) -> Model {
         sunset: "2026-11-09T16:41".into(),
     };
     let mut m = Model::new("Cluj-Napoca", 46.77, 23.6);
+    m.config_url = Some("http://192.168.3.210/".into());
     m.forecast = Some(Forecast {
         current: Some(current),
         hourly,

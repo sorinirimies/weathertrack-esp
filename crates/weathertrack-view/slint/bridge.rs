@@ -5,7 +5,7 @@
 //! including crate provides `mod bridge_config` (plot sizes, hours shown) and the generated
 //! `CurrentData`, `HourData`, `DayData`, `AlertData` and `WeatherApp` at its root.
 
-use crate::{AlertData, CurrentData, DayData, HourData, WeatherApp};
+use crate::{AlertData, CurrentData, DayData, HourData, PlaceData, WeatherApp};
 use slint::{Image, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 use weathertrack_core::app::Model;
 use weathertrack_view::chart::{self, CurveStyle};
@@ -93,14 +93,15 @@ fn alert_data(a: &AlertView) -> AlertData {
     }
 }
 
-/// Whether it is currently day at the location (None before the first forecast).
-pub fn is_day(model: &Model) -> Option<bool> {
-    ViewModel::from_model(model, 1).is_day()
-}
-
 /// Push the whole model into the UI.
 pub fn sync_all(app: &WeatherApp, model: &Model) {
     let vm = ViewModel::from_model(model, HOURS);
+    app.set_place(PlaceData {
+        name: vm.place.name.clone().into(),
+        coordinates: vm.place.coordinates.clone().into(),
+        source: vm.place.source.clone().into(),
+        url: vm.place.url.clone().into(),
+    });
     if let Some(c) = &vm.current {
         app.set_current(current_data(&vm.location, c));
     }

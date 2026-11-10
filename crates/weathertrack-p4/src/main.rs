@@ -15,12 +15,14 @@ mod bridge;
 mod bridge_config;
 mod hw;
 mod net;
+mod place;
 mod store;
 mod ui;
 #[cfg(feature = "slint-ui")]
 mod ui_slint;
 #[cfg(feature = "tui")]
 mod ui_tui;
+mod webconfig;
 mod wifi;
 
 use std::time::{Duration, Instant};
@@ -32,9 +34,11 @@ use esp_idf_svc::{
 };
 use weathertrack_core::app::{self, Model, Msg};
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
+use weathertrack_core::place::Place;
 use weathertrack_view::ViewModel;
 
 use crate::ui::Ui;
+use crate::webconfig::PlaceServer;
 
 #[cfg(feature = "slint-ui")]
 slint::include_modules!();
@@ -126,9 +130,9 @@ fn run() -> anyhow::Result<()> {
         option_env!("DEFAULT_LOCATION"),
         option_env!("LOCATION_FIXED"),
     );
-    if let Some((lat, lon, name)) = &pinned {
-        (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
-    }
+    let pinned_place = pinned.and_then(|(lat, lon, name)| Place::new(lat, lon, &name));
+    let default_place =
+        Place::new(defaults.lat, defaults.lon, defaults.location).expect("a valid default place");
     if !WIFI_SSID.is_empty() {
         (cfg.ssid, cfg.pass) = (WIFI_SSID.to_string(), WIFI_PASS.to_string());
     }
@@ -175,16 +179,34 @@ fn run() -> anyhow::Result<()> {
         }
     }
 
-    // ── Location: follow the network unless the place is pinned ─────
-    if pinned.is_none() && wifi.is_connected().unwrap_or(false) {
-        status(&mut ui, "Detecting location…", 0.55);
-        if let Ok(loc) = net::fetch_ip_location() {
-            cfg.lat = loc.latitude;
-            cfg.lon = loc.longitude;
-            cfg.location = loc.name;
-            store::save_config(&mut nvs_store, &cfg);
-            model = Model::new(&cfg.location, cfg.lat, cfg.lon);
+    // ── Place: pinned > your search > the network > the last known one ──
+    if wifi.is_connected().unwrap_or(false) {
+        status(&mut ui, "Finding your place…", 0.55);
+    }
+    let mut choice = place::load_choice(&nvs_store);
+    let (current, mut source) = place::resolve(
+        pinned_place.clone(),
+        &choice,
+        Place::new(cfg.lat, cfg.lon, &cfg.location),
+        default_place.clone(),
+    );
+    log::info!("place: {} ({})", current.name, source.label());
+    if (current.lat, current.lon, current.name.as_str()) != (model.lat, model.lon, model.location.as_str()) {
+        model = Model::new(&current.name, current.lat, current.lon);
+    }
+    (cfg.lat, cfg.lon, cfg.location) = (current.lat, current.lon, current.name.clone());
+    store::save_config(&mut nvs_store, &cfg);
+    model.place_source = source;
+    // The page where the place can be changed (type a city on a phone or computer).
+    let server = match PlaceServer::start(current.clone(), source) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            log::warn!("place page not started: {e}");
+            None
         }
+    };
+    if let (Some(_), Ok(ip)) = (&server, wifi.wifi().sta_netif().get_ip_info()) {
+        model.config_url = Some(format!("http://{}/", ip.ip));
     }
 
     // ── First fetch ─────────────────────────────────────────────────
@@ -219,7 +241,28 @@ fn run() -> anyhow::Result<()> {
 
     loop {
         let frame_start = Instant::now();
-        let manual = ui.frame();
+        let mut manual = ui.frame();
+        // A place chosen on the web page: use it and fetch its weather right away
+        if let Some(new_choice) = server.as_ref().and_then(PlaceServer::take_choice) {
+            place::save_choice(&mut nvs_store, &new_choice);
+            choice = new_choice;
+            let (now_at, src) = place::resolve(
+                pinned_place.clone(),
+                &choice,
+                Place::new(model.lat, model.lon, &model.location),
+                default_place.clone(),
+            );
+            source = src;
+            (cfg.lat, cfg.lon, cfg.location) = (now_at.lat, now_at.lon, now_at.name.clone());
+            store::save_config(&mut nvs_store, &cfg);
+            (model.lat, model.lon, model.location) = (now_at.lat, now_at.lon, now_at.name.clone());
+            model.place_source = source;
+            if let Some(s) = &server {
+                s.set_place(now_at, source);
+            }
+            ui.show(&model, offline);
+            manual = true;
+        }
         if let Some(theme) = ui.take_theme_change() {
             store::save_theme(&mut nvs_store, theme);
         }

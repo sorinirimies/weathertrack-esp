@@ -8,8 +8,10 @@ mod bridge;
 mod platform;
 
 use weathertrack_core::app;
+use weathertrack_core::place::Place;
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
-use weathertrack_hal::{led, net, nvs, wifi};
+use weathertrack_hal::webconfig::PlaceServer;
+use weathertrack_hal::{led, net, nvs, place, wifi};
 
 use embedded_graphics::{draw_target::DrawTarget, pixelcolor::Rgb565, prelude::*};
 use esp_idf_hal::{
@@ -45,10 +47,10 @@ fn heap_note(what: &str) {
     log::info!("heap {what}: free {free}, largest block {largest}");
 }
 
-/// Seven big pages (now, hours, chart, week, wind + humidity, UV + pressure, sun + rain), plus
-/// alerts while there are any.
+/// Eight big pages (now, hours, chart, week, wind + humidity, UV + pressure, sun + rain, your
+/// place), plus alerts while there are any.
 fn page_count(model: &app::Model) -> i32 {
-    7 + i32::from(!model.alerts.is_empty())
+    8 + i32::from(!model.alerts.is_empty())
 }
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -146,9 +148,8 @@ fn main() {
         option_env!("DEFAULT_LOCATION"),
         option_env!("LOCATION_FIXED"),
     );
-    if let Some((lat, lon, name)) = &configured {
-        (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
-    }
+    let pinned = configured.and_then(|(lat, lon, name)| Place::new(lat, lon, &name));
+    let default_place = Place::new(DEFAULTS.lat, DEFAULTS.lon, DEFAULTS.location).expect("a valid default place");
     nvs::save_config(&mut nvs_store, &cfg);
 
     // ── WiFi ────────────────────────────────────────────────────────
@@ -160,18 +161,20 @@ fn main() {
     let _wifi = wifi::connect(p.modem, sys_loop, nvs_part, &cfg.ssid, &cfg.pass).unwrap();
     led::set_led(0, 0, 255, &mut led_drv);
 
-    // ── Geolocation ─────────────────────────────────────────────────
-    if configured.is_none() {
-        slint_app.set_loading_status("Detecting location...".into());
-        window.request_redraw();
-        platform::render(&window, &mut display);
-        if let Ok(loc) = net::fetch_ip_location() {
-            cfg.lat = loc.latitude;
-            cfg.lon = loc.longitude;
-            cfg.location = loc.name;
-            nvs::save_config(&mut nvs_store, &cfg);
-        }
-    }
+    // ── Place: pinned > your search > the network > the last known one ──
+    slint_app.set_loading_status("Finding your place...".into());
+    window.request_redraw();
+    platform::render(&window, &mut display);
+    let mut choice = place::load_choice(&nvs_store);
+    let (current, mut source) = place::resolve(
+        pinned.clone(),
+        &choice,
+        Place::new(cfg.lat, cfg.lon, &cfg.location),
+        default_place.clone(),
+    );
+    (cfg.lat, cfg.lon, cfg.location) = (current.lat, current.lon, current.name.clone());
+    nvs::save_config(&mut nvs_store, &cfg);
+    log::info!("place: {} ({})", current.name, source.label());
 
     // ── Model + initial fetch ───────────────────────────────────────
     slint_app.set_loading_status("Fetching weather...".into());
@@ -179,6 +182,18 @@ fn main() {
     platform::render(&window, &mut display);
 
     let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
+    model.place_source = source;
+    // The page where the place can be changed (type a city on a phone).
+    let server = match PlaceServer::start(current.clone(), source) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            log::warn!("place page not started: {e}");
+            None
+        }
+    };
+    if let (Some(_), Ok(ip)) = (&server, _wifi.wifi().sta_netif().get_ip_info()) {
+        model.config_url = Some(format!("http://{}/", ip.ip));
+    }
     let mut offline = false;
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
@@ -216,6 +231,28 @@ fn main() {
     let mut last_fetch: u32 = 0;
 
     loop {
+        // A place chosen on the web page
+        if let Some(new_choice) = server.as_ref().and_then(PlaceServer::take_choice) {
+            place::save_choice(&mut nvs_store, &new_choice);
+            choice = new_choice;
+            let (now_at, src) = place::resolve(
+                pinned.clone(),
+                &choice,
+                Place::new(model.lat, model.lon, &model.location),
+                default_place.clone(),
+            );
+            source = src;
+            (cfg.lat, cfg.lon, cfg.location) = (now_at.lat, now_at.lon, now_at.name.clone());
+            nvs::save_config(&mut nvs_store, &cfg);
+            (model.lat, model.lon, model.location) = (now_at.lat, now_at.lon, now_at.name.clone());
+            model.place_source = source;
+            if let Some(s) = &server {
+                s.set_place(now_at, source);
+            }
+            bridge::sync_all(&slint_app, &model);
+            last_fetch = ticks.wrapping_sub(REFRESH_MS); // fetch the new place right away
+        }
+
         let btn = button.is_low();
         if btn && !btn_prev {
             // BOOT flips to the next page (the alerts page only exists while there are alerts)

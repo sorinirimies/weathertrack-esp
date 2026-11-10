@@ -5,8 +5,10 @@
 mod splash;
 
 use weathertrack_core::app;
+use weathertrack_core::place::Place;
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
-use weathertrack_hal::{led, net, nvs, sd, wifi};
+use weathertrack_hal::webconfig::PlaceServer;
+use weathertrack_hal::{led, net, nvs, place, sd, wifi};
 
 use embedded_graphics::{draw_target::DrawTarget, pixelcolor::Rgb565, prelude::*};
 use esp_idf_hal::{
@@ -121,10 +123,12 @@ fn main() {
         option_env!("DEFAULT_LOCATION"),
         option_env!("LOCATION_FIXED"),
     );
-    if let Some((lat, lon, name)) = &configured {
-        (cfg.lat, cfg.lon, cfg.location) = (*lat, *lon, name.clone());
-    }
-    if !cfg.from_nvs || configured.is_some() {
+    let pinned = configured
+        .as_ref()
+        .and_then(|(lat, lon, name)| Place::new(*lat, *lon, name));
+    let default_place =
+        Place::new(DEFAULTS.lat, DEFAULTS.lon, DEFAULTS.location).expect("a valid default place");
+    if !cfg.from_nvs {
         nvs::save_config(&mut nvs_store, &cfg);
         splash::draw_status(&mut display, 1, "Using defaults", Rgb565::YELLOW);
     } else {
@@ -175,39 +179,45 @@ fn main() {
         Rgb565::GREEN,
     );
 
-    // ── Geolocation ─────────────────────────────────────────────────
-    if configured.is_none() {
-        splash::draw_status(&mut display, 3, "Detecting location...", Rgb565::WHITE);
-        if let Ok(loc) = net::fetch_ip_location() {
-            cfg.lat = loc.latitude;
-            cfg.lon = loc.longitude;
-            cfg.location = loc.name.clone();
-            nvs::save_config(&mut nvs_store, &cfg);
-            app::update(
-                &mut model,
-                app::Msg::LocationDetected {
-                    name: loc.name,
-                    lat: loc.latitude,
-                    lon: loc.longitude,
-                },
-            );
-            splash::draw_status(
-                &mut display,
-                3,
-                &format!("Loc: {}", cfg.location),
-                Rgb565::GREEN,
-            );
-        } else {
-            splash::draw_status(&mut display, 3, "Using default location", Rgb565::YELLOW);
-        }
-    } else {
-        splash::draw_status(
-            &mut display,
-            3,
-            &format!("Loc: {}", cfg.location),
-            Rgb565::GREEN,
+    // ── Place: pinned > your search > the network > the last known one ──
+    splash::draw_status(&mut display, 3, "Finding your place...", Rgb565::WHITE);
+    let mut choice = place::load_choice(&nvs_store);
+    let (current, mut source) = place::resolve(
+        pinned.clone(),
+        &choice,
+        Place::new(cfg.lat, cfg.lon, &cfg.location),
+        default_place.clone(),
+    );
+    if (current.lat, current.lon, current.name.as_str()) != (model.lat, model.lon, model.location.as_str()) {
+        app::update(
+            &mut model,
+            app::Msg::LocationDetected {
+                name: current.name.clone(),
+                lat: current.lat,
+                lon: current.lon,
+            },
         );
     }
+    (cfg.lat, cfg.lon, cfg.location) = (current.lat, current.lon, current.name.clone());
+    nvs::save_config(&mut nvs_store, &cfg);
+    model.place_source = source;
+    // The page where the place can be changed (type a city on a phone).
+    let server = match PlaceServer::start(current.clone(), source) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            log::warn!("place page not started: {e}");
+            None
+        }
+    };
+    if let (Some(_), Ok(ip)) = (&server, _wifi.wifi().sta_netif().get_ip_info()) {
+        model.config_url = Some(format!("http://{}/", ip.ip));
+    }
+    splash::draw_status(
+        &mut display,
+        3,
+        &format!("Loc: {}", cfg.location),
+        Rgb565::GREEN,
+    );
 
     // ── Initial weather fetch ───────────────────────────────────────
     splash::draw_status(&mut display, 4, "Fetching weather...", Rgb565::WHITE);
@@ -284,6 +294,29 @@ fn main() {
     let mut redraw = true;
 
     loop {
+        // A place chosen on the web page
+        if let Some(new_choice) = server.as_ref().and_then(PlaceServer::take_choice) {
+            place::save_choice(&mut nvs_store, &new_choice);
+            choice = new_choice;
+            let (now_at, src) = place::resolve(
+                pinned.clone(),
+                &choice,
+                Place::new(model.lat, model.lon, &model.location),
+                default_place.clone(),
+            );
+            source = src;
+            (cfg.lat, cfg.lon, cfg.location) = (now_at.lat, now_at.lon, now_at.name.clone());
+            nvs::save_config(&mut nvs_store, &cfg);
+            (model.lat, model.lon, model.location) = (now_at.lat, now_at.lon, now_at.name.clone());
+            model.place_source = source;
+            if let Some(s) = &server {
+                s.set_place(now_at, source);
+            }
+            view = ViewModel::from_model(&model, HOURS);
+            redraw = true;
+            last_fetch = ticks.wrapping_sub(REFRESH_MS); // fetch the new place right away
+        }
+
         // Input: a short BOOT press flips to the next page, holding it (>= 0.8 s) the next theme
         let btn = button.is_low();
         if btn && !btn_prev {
