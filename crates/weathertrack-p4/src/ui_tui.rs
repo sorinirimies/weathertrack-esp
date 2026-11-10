@@ -15,13 +15,17 @@ use mousefood::embedded_graphics::{
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ratatui::{layout::Rect, Terminal};
 use weathertrack_core::app::Model;
+use weathertrack_core::place::{Place, PlaceChoice};
+use weathertrack_core::saved::SavedPlaces;
+use weathertrack_core::Location;
 use weathertrack_tui_ui::{
-    draw, draw_loading, refresh_at, tab_at, theme_at, theme_count, UiState, HOURS,
+    draw, draw_loading, place_hit_at, refresh_at, tab_at, theme_at, theme_count, PlaceAction,
+    PlaceItem, UiState, HOURS, MAX_RESULTS,
 };
 use weathertrack_view::ViewModel;
 
 use crate::hw::{self, Touch, TouchTracker, HEIGHT, WIDTH};
-use crate::ui::Ui;
+use crate::ui::{SavedEdit, Ui};
 
 const CELL_W: u16 = 10;
 const CELL_H: u16 = 20;
@@ -80,6 +84,12 @@ pub struct TuiUi {
     down_at: Option<(u16, u16)>,
     refresh: bool,
     theme_changed: Option<usize>,
+    // the Place page
+    search: Option<String>,
+    found: Vec<Location>,
+    saved: Vec<Place>,
+    pick: Option<PlaceChoice>,
+    edit: Option<SavedEdit>,
 }
 
 impl TuiUi {
@@ -106,6 +116,11 @@ impl TuiUi {
             down_at: None,
             refresh: false,
             theme_changed: None,
+            search: None,
+            found: Vec::new(),
+            saved: Vec::new(),
+            pick: None,
+            edit: None,
         })
     }
 
@@ -134,7 +149,8 @@ impl TuiUi {
     fn released(&mut self, from: (u16, u16), to: (u16, u16)) {
         let dx = i32::from(to.0) - i32::from(from.0);
         let dy = i32::from(to.1) - i32::from(from.1);
-        if dx.abs() >= SWIPE_PX && dx.abs() > dy.abs() {
+        // the Place page has its own touch targets (the keyboard): no swiping there
+        if dx.abs() >= SWIPE_PX && dx.abs() > dy.abs() && self.state.tab != 4 {
             if dx < 0 {
                 self.state.next_tab()
             } else {
@@ -154,6 +170,32 @@ impl TuiUi {
         } else if let Some(tab) = tab_at(area, col, row) {
             self.state.tab = tab;
             self.redraw = true;
+        } else if let Some(hit) = place_hit_at(area, &self.state, col, row) {
+            self.place_tapped(hit);
+        }
+    }
+}
+
+impl TuiUi {
+    /// A tap on the Place page: typing is handled by the page, the rest becomes a request.
+    fn place_tapped(&mut self, hit: weathertrack_tui_ui::PlaceHit) {
+        self.redraw = true;
+        match self.state.place.handle(hit) {
+            Some(PlaceAction::Search(q)) => self.search = Some(q),
+            Some(PlaceAction::PickSaved(i)) => {
+                self.pick = self.saved.get(i).cloned().map(PlaceChoice::Manual);
+            }
+            Some(PlaceAction::PickResult(i)) => {
+                self.pick = self
+                    .found
+                    .get(i)
+                    .and_then(|l| Place::new(l.latitude, l.longitude, &l.name))
+                    .map(PlaceChoice::Manual);
+            }
+            Some(PlaceAction::UseNetwork) => self.pick = Some(PlaceChoice::Auto),
+            Some(PlaceAction::SaveCurrent) => self.edit = Some(SavedEdit::SaveCurrent),
+            Some(PlaceAction::Forget(i)) => self.edit = Some(SavedEdit::Forget(i)),
+            None => {}
         }
     }
 }
@@ -205,5 +247,50 @@ impl Ui for TuiUi {
             self.draw();
         }
         std::mem::take(&mut self.refresh)
+    }
+
+    fn take_search(&mut self) -> Option<String> {
+        self.search.take()
+    }
+
+    fn set_search_results(&mut self, found: &[Location], status: &str) {
+        self.found = found.iter().take(MAX_RESULTS).cloned().collect();
+        self.state.place.results = self
+            .found
+            .iter()
+            .map(|l| PlaceItem {
+                name: l.name.clone(),
+                detail: [l.region.as_deref().or(l.state.as_deref()), Some(l.country.as_str())]
+                    .into_iter()
+                    .flatten()
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            })
+            .collect();
+        self.state.place.status = status.to_string();
+        self.draw();
+    }
+
+    fn take_place_choice(&mut self) -> Option<PlaceChoice> {
+        self.pick.take()
+    }
+
+    fn set_saved(&mut self, saved: &SavedPlaces, current: &Place) {
+        self.saved = saved.places().to_vec();
+        self.state.place.saved = self
+            .saved
+            .iter()
+            .map(|p| PlaceItem { name: p.name.clone(), detail: format!("{:.2}, {:.2}", p.lat, p.lon) })
+            .collect();
+        self.state.place.selected = self
+            .saved
+            .iter()
+            .position(|p| (p.lat - current.lat).abs() < 0.01 && (p.lon - current.lon).abs() < 0.01);
+        self.draw();
+    }
+
+    fn take_saved_edit(&mut self) -> Option<SavedEdit> {
+        self.edit.take()
     }
 }

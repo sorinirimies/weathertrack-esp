@@ -75,9 +75,15 @@ By default every board looks up where it is from the network on boot (IP geoloca
 
 #### My places (a list of favourites)
 
-Keep up to 8 places and switch between them. On any board's website: **Save this place to my list**, tap a name to show it, **x** to remove it. On the P4 screen the Place tab is the list (tap a place to show it, **x** to remove, **Save this place**, **Search city** opens the keyboard). The list is stored in flash, so it survives reboots, and removing a place removes it from flash too. In the web app the same list is on the Place page.
+Keep up to 8 places and switch between them. On any board's website: **Save this place to my list**, tap a name to show it, **x** to remove it. On the P4 screen (Slint or terminal UI) the Place tab is the list (tap a place to show it, **x** to remove, **Save this place**, **Search city** opens the keyboard). The list is stored in flash, so it survives reboots, and removing a place removes it from flash too. In the web app the same list is on the Place page.
 
 With **Keep my devices on this place** on, the web app and the boards keep the *same list*: a place saved or removed on one side reaches the others (the last change wins), removals included.
+
+The P4's terminal UI has the same list and keyboard:
+
+| P4 · my places (terminal) | P4 · search (terminal) |
+|---|---|
+| ![P4 TUI places](docs/screenshots/p4-tui-place-list.png) | ![P4 TUI search](docs/screenshots/p4-tui-place-search.png) |
 
 Order of precedence: a place pinned in `config.toml` (`[location] fixed = true`) beats your choice, which beats the network lookup, which beats the last known place. The page logic lives in `weathertrack-core` (`place`, `geocode`, `web`: pure, tested and fuzzed); each firmware only serves it.
 

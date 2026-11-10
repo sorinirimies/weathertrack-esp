@@ -8,6 +8,7 @@
 mod compact;
 mod glyphs;
 mod pages;
+mod place;
 mod theme;
 mod widgets;
 
@@ -17,6 +18,10 @@ use ratatui::layout::Rect;
 use weathertrack_view::ViewModel;
 
 pub use glyphs::{art, big, big_width};
+pub use place::{
+    Button as PlaceButton, Hit as PlaceHit, Kind as ButtonKind, MAX_QUERY, MAX_RESULTS,
+    PlaceAction, PlaceItem, PlaceUi,
+};
 
 /// The pages of the wide layout, in order (the compact layout has its own, see [`page_names`]).
 pub const TABS: [&str; 6] = ["Today", "Hourly", "7 Days", "Details", "Place", "Alerts"];
@@ -34,6 +39,8 @@ pub struct UiState {
     pub refreshing: bool,
     /// Index of the selected colour theme ([`theme_count`], [`theme_name`]).
     pub theme: usize,
+    /// The Place page: the saved places and the keyboard.
+    pub place: PlaceUi,
 }
 
 impl UiState {
@@ -147,6 +154,25 @@ pub fn render_loading(area: Rect, buf: &mut Buffer, status: &str, progress: f32)
         progress.max(0.04),
         theme::c_accent(),
     );
+}
+
+/// The area of the wide layout between the header and the tab bar (where the Place page draws).
+pub fn body_of(area: Rect) -> Rect {
+    Rect::new(
+        area.x,
+        area.y + pages::HEADER_ROWS,
+        area.width,
+        area.height
+            .saturating_sub(pages::HEADER_ROWS + pages::TAB_BAR_ROWS),
+    )
+}
+
+/// What a tap at (`col`, `row`) hits on the wide layout's Place page.
+pub fn place_hit_at(area: Rect, state: &UiState, col: u16, row: u16) -> Option<PlaceHit> {
+    if Density::of(area) != Density::Wide || state.tab != 4 {
+        return None;
+    }
+    place::hit(body_of(area), &state.place, col, row)
 }
 
 /// Which tab a tap at cell (`col`, `row`) hits, for the wide layout's tab bar.
@@ -397,12 +423,17 @@ mod tests {
                         "{} {w}x{h} tab {tab}",
                         theme_name(theme)
                     );
-                    // every cell uses the theme's background, never the terminal default
+                    // every cell uses a colour of the theme, never the terminal default
+                    // (buttons use the theme's border and accent colours)
                     let bg = theme::entry(theme).palette.bg;
+                    let allowed = [
+                        bg,
+                        theme::c_border(),
+                        theme::c_accent(),
+                        ratatui::style::Color::Reset,
+                    ];
                     assert!(
-                        buf.content()
-                            .iter()
-                            .all(|c| c.bg == bg || c.bg == ratatui::style::Color::Reset),
+                        buf.content().iter().all(|c| allowed.contains(&c.bg)),
                         "{}",
                         theme_name(theme)
                     );

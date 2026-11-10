@@ -35,7 +35,7 @@ pub fn screen(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     );
     match (&vm.current, state.tab) {
         // the place tab does not need a forecast: it is how a wrong place gets fixed
-        (_, 4) => place(body, buf, vm),
+        (_, 4) => crate::place::render(body, buf, vm, &state.place),
         (None, _) => waiting(body, buf),
         (Some(c), 0) => now_wide(body, buf, vm, c),
         (Some(_), 1) => hourly(body, buf, vm),
@@ -543,74 +543,6 @@ const CARD_TITLES: [&str; 6] = [
     "PRESSURE",
     "PRECIPITATION",
 ];
-
-// ── Place ───────────────────────────────────────────────────────────────────
-
-/// Which place is shown, where it came from, and how to change it.
-fn place(body: Rect, buf: &mut Buffer, vm: &ViewModel) {
-    let area = frame(buf, body, "Your place", theme::c_border());
-    let x = area.left() + 3;
-    put(
-        buf,
-        area,
-        x,
-        area.top() + 1,
-        &vm.place.name,
-        theme::bold(theme::c_text()),
-    );
-    put(
-        buf,
-        area,
-        x,
-        area.top() + 2,
-        &format!("{}   -   {}", vm.place.coordinates, vm.place.source),
-        theme::muted(),
-    );
-    put(
-        buf,
-        area,
-        x,
-        area.top() + 5,
-        "Change it from a phone or computer on the same WiFi network:",
-        theme::text(),
-    );
-    if vm.place.url.is_empty() {
-        put(
-            buf,
-            area,
-            x,
-            area.top() + 7,
-            "waiting for WiFi ...",
-            theme::faint(),
-        );
-    } else {
-        put(
-            buf,
-            area,
-            x + 3,
-            area.top() + 7,
-            &vm.place.url,
-            theme::bold(theme::c_accent()),
-        );
-    }
-    for (i, line) in [
-        "1. Open the address above in a browser.",
-        "2. Type a city, tap Search, then tap the right result.",
-        "3. \"Use my network location\" goes back to automatic.",
-    ]
-    .iter()
-    .enumerate()
-    {
-        put(
-            buf,
-            area,
-            x,
-            area.top() + 10 + i as u16,
-            line,
-            theme::muted(),
-        );
-    }
-}
 
 // ── Alerts ──────────────────────────────────────────────────────────────────
 

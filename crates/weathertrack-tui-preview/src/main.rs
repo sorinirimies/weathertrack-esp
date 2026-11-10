@@ -15,7 +15,9 @@ use mousefood::embedded_graphics::{
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use weathertrack_tui_ui::{draw, page_names, theme_count, theme_name, UiState, HOURS};
+use weathertrack_tui_ui::{
+    draw, page_names, theme_count, theme_name, PlaceItem, PlaceUi, UiState, HOURS,
+};
 use weathertrack_view::{sample, ViewModel};
 
 /// A pixel buffer standing in for the LCD.
@@ -178,5 +180,53 @@ fn main() {
                 scale,
             );
         }
+    }
+
+    // The P4's Place page: the saved places, then the keyboard while searching.
+    let item = |n: &str, d: &str| PlaceItem {
+        name: n.into(),
+        detail: d.into(),
+    };
+    let saved = vec![
+        item("Cluj-Napoca", "46.77, 23.60"),
+        item("Stuttgart", "48.78, 9.18"),
+        item("Berlin", "52.52, 13.41"),
+        item("München", "48.14, 11.58"),
+        item("Zürich", "47.38, 8.54"),
+    ];
+    for (file, place) in [
+        (
+            "p4-place-list",
+            PlaceUi {
+                saved: saved.clone(),
+                selected: Some(0),
+                ..PlaceUi::default()
+            },
+        ),
+        (
+            "p4-place-search",
+            PlaceUi {
+                searching: true,
+                query: "stuttgart".into(),
+                results: vec![
+                    item("Stuttgart", "Baden-Württemberg, Germany"),
+                    item("Stuttgart", "Arkansas, United States"),
+                    item("Stuttgart-Ost", "Baden-Württemberg, Germany"),
+                    item("Stuttgart Airport", "Baden-Württemberg, Germany"),
+                ],
+                saved,
+                selected: Some(0),
+                ..PlaceUi::default()
+            },
+        ),
+    ] {
+        let state = UiState {
+            tab: 4,
+            theme,
+            place,
+            ..UiState::default()
+        };
+        let screen = render(1024, 600, (fonts::MONO_10X20, None), &vm, &state);
+        save(&format!("{dir}/{file}.png"), &screen, 1);
     }
 }
