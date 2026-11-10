@@ -1,7 +1,10 @@
-# esp32-c6-weathertrack workspace — task runner
-# Install just:      cargo install just
-# Install git-cliff: cargo install git-cliff
-# Usage: just <task>
+# WeatherTrack (esp32-c6-weathertrack) — task runner
+# Recipes run in Nushell; anything longer than a line lives in scripts/*.nu (tested).
+# Install: cargo install just nu git-cliff   — then `just install-tools`
+# Usage:   just <task>
+
+set shell := ["nu", "-c"]
+
 # ── Default ───────────────────────────────────────────────────────────────────
 
 default:
@@ -10,380 +13,332 @@ default:
 # ── Tool checks ───────────────────────────────────────────────────────────────
 
 _check-git-cliff:
-    @command -v git-cliff >/dev/null 2>&1 || { \
-        echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; \
-    }
+    @nu scripts/tools.nu check git-cliff
 
-# Check nu (nushell) is available
-_check-nu:
-    @command -v nu >/dev/null 2>&1 || { \
-        echo "❌ nu (nushell) not found. Install: https://www.nushell.sh"; exit 1; \
-    }
-
-_check-cargo-outdated:
-    @command -v cargo-outdated >/dev/null 2>&1 || { \
-        echo "❌ cargo-outdated not found. Install with: cargo install cargo-outdated"; exit 1; \
-    }
-
-# Install all recommended development tools
+# Install the development tools (git-cliff, cargo-audit/deny/fuzz/llvm-cov/outdated/machete)
 install-tools:
-    @echo "Installing development tools…"
-    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff --locked
-    @command -v nu >/dev/null 2>&1 || cargo install nu --locked
-    @command -v cargo-outdated >/dev/null 2>&1 || cargo install cargo-outdated --locked
-    @echo "✅ All tools installed!"
+    nu scripts/tools.nu install
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-# Generate sdkconfig.defaults with absolute partition table paths (machine-specific)
+# Check without building
+check:
+    cargo check --workspace
+
+# Build (dev)
+build:
+    cargo build --workspace
+
+# Release build of the host workspace (the firmware has its own recipes below)
+build-release:
+    cargo build --workspace --release
+
+# ── ESP firmware (not workspace members: they need the ESP toolchain) ─────────
+# Needs: espup, ldproxy, espflash and the nightly pinned in each crate's rust-toolchain.toml.
+
+# Generate the C6 crates' sdkconfig.defaults (absolute partition paths, machine-specific)
 gen-sdkconfig:
-    #!/usr/bin/env sh
-    for crate in weathertrack-tui weathertrack-gui; do
-        dir="crates/$crate"
-        csv="$dir/partitions.csv"
-        out="$dir/sdkconfig.defaults"
-        abs=$(readlink -f "$csv")
-        printf '%s\n' \
-            'CONFIG_ESP_MAIN_TASK_STACK_SIZE=65536' \
-            'CONFIG_ESP_WIFI_ENABLED=y' \
-            'CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y' \
-            'CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y' \
-            'CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y' \
-            'CONFIG_PARTITION_TABLE_CUSTOM=y' \
-            "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME=\"$abs\"" \
-            'CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y' \
-            'CONFIG_ESPTOOLPY_FLASHSIZE="8MB"' \
-            > "$out"
-        echo "Generated $out (partition: $abs)"
-    done
+    nu scripts/esp.nu gen-sdkconfig
 
-# Build the core library (host target)
-build-core:
-    cargo build -p weathertrack-core
-
-# Build the TUI crate (ESP32 target)
+# Build the TUI firmware (ESP32-C6)
 build-tui: gen-sdkconfig
-    cd crates/weathertrack-tui && cargo build
+    cd crates/weathertrack-tui; cargo build
 
-# Build the GUI crate (ESP32 target)
+# Build the GUI firmware (ESP32-C6, 172x320 SPI display)
 build-gui: gen-sdkconfig
-    cd crates/weathertrack-gui && cargo build
+    cd crates/weathertrack-gui; cargo build
 
-# Build release for TUI
+# Release build of the TUI firmware
 build-tui-release: gen-sdkconfig
-    cd crates/weathertrack-tui && cargo build --release
+    cd crates/weathertrack-tui; cargo build --release
 
-# Build release for GUI
+# Release build of the GUI firmware
 build-gui-release: gen-sdkconfig
-    cd crates/weathertrack-gui && cargo build --release
+    cd crates/weathertrack-gui; cargo build --release
 
-# Remove build artifacts
-clean:
-    cargo clean
-
-# ── Flash & Run ───────────────────────────────────────────────────────────────
-
-# Flash and monitor the TUI on ESP32
+# Flash and monitor the TUI firmware (ESP32-C6)
 run-tui: gen-sdkconfig
-    cd crates/weathertrack-tui && cargo run
+    cd crates/weathertrack-tui; cargo run
 
-# Flash and monitor the GUI on ESP32
+# Flash and monitor the GUI firmware (ESP32-C6)
 run-gui: gen-sdkconfig
-    cd crates/weathertrack-gui && cargo run
+    cd crates/weathertrack-gui; cargo run
 
-# Flash release TUI
+# Flash and monitor the release TUI firmware
 run-tui-release: gen-sdkconfig
-    cd crates/weathertrack-tui && cargo run --release
+    cd crates/weathertrack-tui; cargo run --release
 
-# Flash release GUI
+# Flash and monitor the release GUI firmware
 run-gui-release: gen-sdkconfig
-    cd crates/weathertrack-gui && cargo run --release
+    cd crates/weathertrack-gui; cargo run --release
+
+# Everything that is not part of CI: all firmware builds (slow, needs the ESP toolchain)
+check-firmware: build-tui-release build-gui-release build-p4-release
 
 # ── ESP32-P4 · Waveshare 7" touch (crates/weathertrack-p4) ────────────────────
 
 # Render every P4 UI tab to PNG on the host (no hardware needed) → target/p4-ui/
 preview-p4:
-    cd crates/weathertrack-p4-preview && cargo run --release -- ../../target/p4-ui
+    cd crates/weathertrack-p4-preview; cargo run --release -- ../../target/p4-ui
 
 # Generate crates/weathertrack-p4/sdkconfig.defaults (absolute partition path)
 gen-sdkconfig-p4:
-    sd '@PARTITIONS@' "$(pwd)/crates/weathertrack-p4/partitions.csv" < crates/weathertrack-p4/sdkconfig.defaults.in > crates/weathertrack-p4/sdkconfig.defaults
+    nu scripts/esp.nu gen-sdkconfig-p4
 
 # Build the P4 firmware (debug)
 build-p4: gen-sdkconfig-p4
-    cd crates/weathertrack-p4 && cargo build
+    cd crates/weathertrack-p4; cargo build
 
 # Build the P4 firmware (release)
 build-p4-release: gen-sdkconfig-p4
-    cd crates/weathertrack-p4 && cargo build --release
+    cd crates/weathertrack-p4; cargo build --release
 
-# Flash the release firmware to the board and open the serial monitor
-flash-p4 *port: build-p4-release
-    #!/usr/bin/env sh
-    set -e
-    cd crates/weathertrack-p4
-    out=target/riscv32imafc-esp-espidf/release
-    bl=$(fd -HI -t f '^bootloader.bin$' "$out/build/esp-idf-sys" | xargs ls -t | head -n1)
-    [ -n "$bl" ] || { echo "bootloader.bin not found under $out/build"; exit 1; }
-    espflash flash --chip esp32p4 --flash-size 32mb --partition-table partitions.csv \
-        --bootloader "$bl" --monitor {{ if port != "" { "--port " + port } else { "" } }} "$out/weathertrack-p4"
+# Flash the release firmware to the P4 and open the serial monitor
+flash-p4 port="": build-p4-release
+    nu scripts/esp.nu flash-p4 --port "{{ port }}"
 
-# Back up the board's current flash (32 MB) before overwriting it
-backup-p4 file="p4-factory-backup.bin" *port:
-    espflash read-flash {{ if port != "" { "--port " + port } else { "" } }} 0 0x2000000 {{file}}
+# Back up the parts of the P4 flash worth keeping before overwriting it (≈10 min, USB is slow)
+backup-p4 port="":
+    nu scripts/esp.nu backup-p4 --port "{{ port }}"
 
-# ── Test ──────────────────────────────────────────────────────────────────────
+# ── Test & quality ────────────────────────────────────────────────────────────
 
-# Run the core library test suite
+# Rust tests
 test:
-    cargo test -p weathertrack-core --all-features --all-targets
+    cargo test --workspace --all-features
 
-# Run Nu script tests
-test-nu: _check-nu
+# Nushell script tests
+test-nu:
     nu scripts/tests/run_all.nu
 
-# Run both Rust and Nu tests
-test-all: test test-nu
-    @echo "✅ All Rust and Nu tests passed!"
-
-# ── Code quality ──────────────────────────────────────────────────────────────
-
-# Check without building
-check:
-    cargo check -p weathertrack-core
-
-# Format all code
 fmt:
     cargo fmt --all
 
-# Check formatting without modifying files
 fmt-check:
     cargo fmt --all -- --check
 
-# Run clippy on the core crate
+# Clippy, warnings are errors
 clippy:
-    cargo clippy -p weathertrack-core --all-targets --all-features -- -D warnings -A deprecated
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-# Build and open crate documentation
+# Rust and Nu tests
+test-all-nu: test test-nu
+    @echo "✅ All Rust and Nu tests passed!"
+
+# Line coverage (needs cargo-llvm-cov); writes target/llvm-cov/html
+coverage:
+    cargo llvm-cov --workspace --html
+    @echo "→ target/llvm-cov/html/index.html"
+
+# Docs for the workspace, warnings are errors (what docs.rs would reject)
 doc:
-    cargo doc -p weathertrack-core --no-deps --open
+    $env.RUSTDOCFLAGS = "-D warnings"; cargo doc --no-deps --workspace
 
-# Run all quality checks (format, clippy, test, nu) — must pass before a release.
+# Secrets anywhere in the git history (brew install gitleaks); CI runs it on every push.
+# A false positive goes in .gitleaksignore, by the fingerprint gitleaks prints.
+secrets:
+    gitleaks git --redact --no-banner .
 
-# Auto-formats first, then verifies no changes remain (catches unstaged format diffs).
-check-all: fmt clippy test test-nu
-    @echo "🔍 Verifying formatting is clean…"
-    cargo fmt --all -- --check
-    @echo "✅ All checks passed!"
+# Everything CI runs (fmt check, clippy, tests, versions, nu tests)
+check-all: fmt
+    nu scripts/ci/quality_gate.nu
 
-# Full pre-release quality gate — everything in check-all plus release builds.
-check-release: check-all build-tui-release build-gui-release
-    @echo "✅ Release quality gate passed (fmt + clippy + test + nu + release builds)!"
+# Security: known vulnerabilities (cargo install cargo-audit)
+audit:
+    cargo audit
+
+# Security: licenses, advisories, bans, sources (cargo install cargo-deny)
+deny:
+    cargo deny check
+
+# Dependencies nothing uses (cargo install cargo-machete; the gate runs it too)
+unused-deps:
+    cargo machete
+
+# Fuzz one target (e.g. just fuzz parse 60); needs nightly + cargo-fuzz
+fuzz target secs="60":
+    cargo +nightly fuzz run {{ target }} -- -max_total_time={{ secs }}
+
+# Every fuzz target for a short while
+fuzz-all secs="30":
+    nu scripts/ci/fuzz_all.nu --secs {{ secs }}
+
+# List the fuzz targets
+fuzz-list:
+    cargo +nightly fuzz list
+
+# Security + fuzz locally, like the nightly workflows
+nightly-local: audit deny fuzz-all
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+
+# Update Cargo.lock and fuzz/Cargo.lock (semver-compatible only)
+update:
+    nu scripts/ci/deps_update.nu update
+
+# Show outdated dependencies (needs cargo-outdated)
+outdated:
+    cargo outdated --workspace
+
+# What the nightly workflow does: update, full gate, commit and push if green
+update-deps: update check-all
+    nu scripts/ci/deps_update.nu commit (git config user.name) (git config user.email)
+
+# ── Nightly workflows on demand ───────────────────────────────────────────────
+
+# Run a GitHub workflow now (deps-update | security | fuzz | ci), needs gh
+gh-run workflow="deps-update":
+    gh workflow run {{ workflow }}.yml
+    @echo "✅ Dispatched {{ workflow }} — gh run watch"
+
+# Run a Gitea workflow now (deps-update | security | fuzz); needs GITEA_URL + GITEA_TOKEN
+gitea-run workflow="deps-update":
+    nu scripts/gitea_run.nu {{ workflow }}
+
+# The nightly dependency update, now, on both hosts
+deps-update-now: (gh-run "deps-update")
+    -just gitea-run deps-update
+
+# Security audit workflow, now, on both hosts
+security-now: (gh-run "security")
+    -just gitea-run security
+
+# Fuzz workflow, now, on both hosts
+fuzz-now: (gh-run "fuzz")
+    -just gitea-run fuzz
 
 # ── Changelog ─────────────────────────────────────────────────────────────────
 
-# Regenerate the full CHANGELOG.md from all tags
+# Regenerate CHANGELOG.md from all tags
 changelog: _check-git-cliff
-    @echo "Generating full changelog…"
     git-cliff --output CHANGELOG.md
-    @echo "✅ CHANGELOG.md updated."
 
-# Prepend only unreleased commits to CHANGELOG.md
-changelog-unreleased: _check-git-cliff
-    git-cliff --unreleased --prepend CHANGELOG.md
-    @echo "✅ Unreleased changes prepended."
-
-# Preview changelog for the next release without writing the file
+# Preview the next release's changelog
 changelog-preview: _check-git-cliff
     @git-cliff --unreleased
 
-# ── Version bump ──────────────────────────────────────────────────────────────
+# Prepend only the unreleased commits to CHANGELOG.md
+changelog-unreleased: _check-git-cliff
+    git-cliff --unreleased --prepend CHANGELOG.md
 
-# Show the current workspace version
-version: _check-nu
+# Show the latest release's entry
+changelog-latest: _check-git-cliff
+    @git-cliff --latest
+
+# ── Version & release ─────────────────────────────────────────────────────────
+
+# Current version (Cargo.toml)
+version:
     @nu scripts/version.nu
 
-# Validate that a version string will produce a valid vX.Y.Z tag.
-validate-tag version: _check-nu
-    @nu scripts/ci/validate_tag.nu "v{{ version }}" 2>&1 >/dev/null
+# Check Cargo.toml and EXTRA_MANIFESTS agree (and a tag, if given)
+check-versions tag="":
+    nu scripts/ci/check_versions.nu {{ tag }}
 
-# Fail fast if the requested version is the same as the current one.
-_check-version-changed version: _check-nu
-    #!/usr/bin/env sh
-    current=$(nu scripts/version.nu)
-    if [ "$current" = "{{ version }}" ]; then
-        echo "❌ Version {{ version }} is already the current version. Nothing to bump."
-        exit 1
-    fi
-    echo "✅ Version will change: $current → {{ version }}"
+# Validate that a version gives a valid vX.Y.Z tag
+validate-tag version:
+    nu scripts/ci/validate_tag.nu "v{{ version }}"
 
-# Bump the workspace version, regenerate Cargo.lock + CHANGELOG.md, commit and tag.
+# What would be released, without changing anything
+release-preview: _check-git-cliff
+    @print $"Current version: (nu scripts/version.nu)\n"
+    @git-cliff --unreleased
+    @echo "Ships: weathertrack (crates.io, docs on docs.rs)"
 
-# Validation runs first (cheap), quality gate runs second (expensive).
-bump version: (validate-tag version) (_check-version-changed version) check-release _check-git-cliff
-    nu scripts/bump_version.nu {{ version }}
+# Everything in check-all plus a release build and the docs
+check-release: check-all build-release doc
+    @echo "✅ Release gate passed"
 
-# ── Housekeeping ──────────────────────────────────────────────────────────────
+# Dry-run the crates.io publish of every crate in scripts/project.nu
+publish-dry:
+    nu scripts/ci/publish_crate.nu --dry-run
 
-# Update all dependencies (Cargo.lock only)
-update:
-    cargo update
+# Bump Cargo.toml (+ EXTRA_MANIFESTS) + Cargo.lock, regenerate the changelog, commit and tag
+bump version: _check-git-cliff check-all
+    nu scripts/bump_version.nu --yes --skip-checks {{ version }}
 
-# Update dependencies, run the full quality gate, then commit and push if all green.
-update-deps:
-    @echo "⬆️  Updating dependencies…"
-    cargo update
-    @echo "🔍 Running quality gate…"
-    cargo fmt --all -- --check
-    cargo clippy -p weathertrack-core --all-targets --all-features -- -D warnings -A deprecated
-    cargo test -p weathertrack-core --all-features --all-targets
-    @echo "✅ All checks passed — committing dependency updates…"
-    git add Cargo.lock
-    git diff --cached --quiet || git commit -m "chore: update dependencies"
-    just push-all
-    @echo "✅ Dependency updates pushed to all remotes."
+# Bump, tag and push to GitHub — starts the Release workflow
+release version: (bump version)
+    git push --follow-tags origin (git branch --show-current)
+    @print "✅ v{{ version }} pushed — the Release workflow publishes to crates.io."
 
-# Upgrade all dependencies (nu script)
-upgrade-deps: _check-nu
-    nu scripts/upgrade_deps.nu
+# First release of the version already in Cargo.toml (no bump), pushed to GitHub
+release-initial: _check-git-cliff check-all
+    nu scripts/release_initial.nu
+    git push --follow-tags origin (git branch --show-current)
 
-# Show outdated dependencies (requires cargo-outdated)
-outdated: _check-cargo-outdated
-    cargo outdated
+# Bump, tag and push to every remote — starts the Release workflows on both hosts
+release-all version: (bump version) push-all
+
+# Bump, tag and push to Gitea only
+release-gitea-starscream version: (bump version)
+    git push --follow-tags gitea-starscream (git branch --show-current)
+
+# First release, pushed to every remote
+release-initial-all: _check-git-cliff check-all
+    nu scripts/release_initial.nu
+    nu scripts/remotes.nu push
+
+# Re-run the GitHub Release workflow for an existing tag (e.g. just release-retrigger 0.1.0)
+release-retrigger version:
+    gh workflow run release.yml --field tag=v{{ version }}
+
+
+# ── Git remotes (GitHub = origin, Gitea = gitea-starscream; no mirroring) ─────
+
+# Push the current branch + tags to every configured remote (continues on failure)
+push-all:
+    nu scripts/remotes.nu push
 
 # Show all configured remotes
 remotes:
     @git remote -v
 
-# ── Git remotes & pushing ─────────────────────────────────────────────────────
-
-# Push the current branch to origin (Gitea 192.168.1.204)
-push:
-    git push origin main
-
 # Push the current branch to GitHub
-push-github:
-    git push github main
+push:
+    git push origin (git branch --show-current)
 
-# Push the current branch to Starscream (Gitea 192.168.1.44)
-push-starscream:
-    git push starscream main
+# Push the current branch to Gitea Starscream
+push-gitea-starscream:
+    git push gitea-starscream (git branch --show-current)
 
-# Push the current branch to all remotes (continues on failure)
-push-all:
-    #!/usr/bin/env sh
-    failed=""
-    git push origin main      || failed="$failed origin"
-    git push starscream main  || failed="$failed starscream"
-    git push github main      || failed="$failed github"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push to:$failed"
-    else
-        echo "✅ Pushed to origin, Starscream, and GitHub!"
-    fi
-
-# Force-push the current branch to all remotes
-push-all-force:
-    #!/usr/bin/env sh
-    failed=""
-    git push --force-with-lease origin main      || failed="$failed origin"
-    git push --force-with-lease starscream main   || failed="$failed starscream"
-    git push --force-with-lease github main       || failed="$failed github"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to force-push to:$failed"
-    else
-        echo "✅ Force-pushed to origin, Starscream, and GitHub!"
-    fi
-
-# Pull the current branch from origin
-pull:
-    git pull origin main
-
-# Pull the current branch from all remotes (continues on failure)
-pull-all:
-    #!/usr/bin/env sh
-    failed=""
-    git pull origin main      || failed="$failed origin"
-    git pull starscream main  || failed="$failed starscream"
-    git pull github main      || failed="$failed github"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to pull from:$failed"
-    else
-        echo "✅ Pulled from origin, Starscream, and GitHub!"
-    fi
-
-# Push all tags to origin
+# Push all tags to GitHub
 push-tags:
     git push origin --tags
 
-# Push all tags to all remotes (continues on failure)
+# Push all tags to every remote (continues on failure)
 push-tags-all:
-    #!/usr/bin/env sh
-    failed=""
-    git push origin --tags      || failed="$failed origin"
-    git push starscream --tags  || failed="$failed starscream"
-    git push github --tags      || failed="$failed github"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push tags to:$failed"
-    else
-        echo "✅ Tags pushed to all remotes!"
-    fi
+    nu scripts/remotes.nu push-tags
 
-# ── Release workflows ─────────────────────────────────────────────────────────
+# Latest commit + tags to every remote, after the gate (no bump)
+push-release-all: check-all push-all
 
-# Bump, commit, tag, then push to origin — primary release target.
-release version: (bump version)
-    @echo "Pushing release v{{ version }} to origin…"
-    git push --follow-tags origin main
-    @echo "✅ Release v{{ version }} pushed to origin."
+# Force-push the current branch to every remote (no lease — be sure!)
+push-all-force:
+    nu scripts/remotes.nu push --force
 
-# Bump, commit, tag, then push to all remotes (continues on failure).
-release-all version: (bump version)
-    #!/usr/bin/env sh
-    echo "Pushing release v{{ version }} to all remotes…"
-    failed=""
-    git push --follow-tags origin main      || failed="$failed origin"
-    git push --follow-tags starscream main  || failed="$failed starscream"
-    git push --follow-tags github main      || failed="$failed github"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Release v{{ version }} failed to push to:$failed"
-    else
-        echo "✅ Release v{{ version }} pushed to origin, Starscream, and GitHub!"
-    fi
+# Pull the current branch from GitHub
+pull:
+    git pull origin (git branch --show-current)
 
-# Preview what a release would look like
-release-preview: _check-git-cliff
-    @echo "Current version: $(just version)"
-    @echo ""
-    @echo "Unreleased commits:"
-    @git-cliff --unreleased
-    @echo ""
-    @echo "Workspace version:"
-    @grep -A5 '^\[workspace\.package\]' Cargo.toml | grep '^version'
+# Pull the current branch from Gitea Starscream
+pull-gitea-starscream:
+    git pull gitea-starscream (git branch --show-current)
 
-# Push the latest commit and all tags to every remote (no bump, continues on failure).
-push-release-all: check-all
-    #!/usr/bin/env sh
-    failed=""
-    git push --follow-tags origin main      || failed="$failed origin"
-    git push --follow-tags starscream main  || failed="$failed starscream"
-    git push --follow-tags github main      || failed="$failed github"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push to:$failed"
-    else
-        echo "✅ Latest commit + tags pushed to all remotes."
-    fi
+# Pull the current branch from every remote (continues on failure)
+pull-all:
+    nu scripts/remotes.nu pull
 
-# Force-sync all remotes with origin (continues on failure)
-sync-all:
-    #!/usr/bin/env sh
-    failed=""
-    git push starscream main --force       || failed="$failed starscream"
-    git push starscream --tags --force     || failed="$failed starscream-tags"
-    git push github main --force           || failed="$failed github"
-    git push github --tags --force         || failed="$failed github-tags"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to sync:$failed"
-    else
-        echo "✅ All remotes force-synced with origin."
-    fi
+# Force-sync Gitea Starscream with this checkout (branch + tags) — the nightlies diverge
+sync-gitea-starscream:
+    git push gitea-starscream (git branch --show-current) --force
+    git push gitea-starscream --tags --force
+
+# Add the missing remotes
+setup-remotes:
+    nu scripts/remotes.nu setup
+
+# Remove build artifacts
+clean:
+    cargo clean
+    rm -rf dist

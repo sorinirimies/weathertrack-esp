@@ -5,9 +5,8 @@
 Cargo.lock
 !Cargo.lock
 
-# Keep workspace lockfile, ignore per-crate lockfiles
+# Lockfiles are committed: the workspace one and those of the standalone firmware crates.
 !/Cargo.lock
-crates/*/Cargo.lock
 
 # ── ESP-IDF / Embedded ───────────────────────────────────────
 **/.embuild/
@@ -50,3 +49,9 @@ config.toml
 # Local-only: flash dumps of the original board firmware, code index
 backups/
 .codegraph/
+
+# ── Fuzzing / releases ───────────────────────────────────────────────
+/fuzz/artifacts/
+/fuzz/corpus/
+/fuzz/target/
+/RELEASE_NOTES.md
