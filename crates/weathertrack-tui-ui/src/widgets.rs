@@ -74,7 +74,7 @@ pub fn frame(buf: &mut Buffer, area: Rect, title: &str, border: Color) -> Rect {
             l + 2,
             t,
             &format!(" {title} "),
-            theme::bold(theme::MUTED),
+            theme::bold(theme::c_muted()),
         );
     }
     Rect::new(l + 1, t + 1, area.width - 2, area.height - 2)
@@ -90,7 +90,7 @@ pub fn gauge(buf: &mut Buffer, area: Rect, x: u16, y: u16, width: u16, frac: f32
         x + on.chars().count() as u16,
         y,
         &off,
-        theme::on_bg(theme::BORDER),
+        theme::on_bg(theme::c_border()),
     );
 }
 

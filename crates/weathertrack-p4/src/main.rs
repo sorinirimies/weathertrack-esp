@@ -127,6 +127,7 @@ fn run() -> anyhow::Result<()> {
         (cfg.ssid, cfg.pass) = (WIFI_SSID.to_string(), WIFI_PASS.to_string());
     }
     store::save_config(&mut nvs_store, &cfg);
+    ui.set_theme(store::load_theme(&nvs_store));
 
     // ── Show the cached forecast right away ─────────────────────────
     let mut model = Model::new(&cfg.location, cfg.lat, cfg.lon);
@@ -215,6 +216,9 @@ fn run() -> anyhow::Result<()> {
     loop {
         let frame_start = Instant::now();
         let manual = ui.frame();
+        if let Some(theme) = ui.take_theme_change() {
+            store::save_theme(&mut nvs_store, theme);
+        }
 
         let interval = if offline { RETRY } else { refresh };
         if manual || last_fetch.elapsed() >= interval {

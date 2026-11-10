@@ -43,6 +43,18 @@ On the C6's small screen the same UI switches to a compact layout:
 
 ![C6 TUI week](docs/screenshots/c6-tui-week.png)
 
+### Themes
+
+The terminal UI is themed with [tui-nuances](https://github.com/sorinirimies/tui-nuances): WeatherTrack (the default), Catppuccin, Tokyo Night, Nord, Dracula, Gruvbox, Solarized (dark and light), One Dark, Rosé Pine, Monokai, Kanagawa, Everforest, Night Owl, Synthwave, Pip-Boy, Porsche, High contrast, GitHub Light. Text, borders and chart colours are contrast-checked against each theme's background, so light themes stay readable.
+
+- **C6:** a short BOOT press changes the page, **holding BOOT (0.8 s) changes the theme**.
+- **P4:** tap **Theme: name >** under the Refresh button.
+- The choice is kept in flash across reboots. `just preview-themes` renders every theme.
+
+| P4 · Nord | C6 · Catppuccin Latte (shown 3×) |
+|---|---|
+| ![P4 Nord](docs/screenshots/p4-tui-nord.png) | ![C6 Latte](docs/screenshots/c6-tui-latte.png) |
+
 ## Architecture
 
 The project follows the **Elm architecture** pattern: `Model → Msg → update → view`.
@@ -62,7 +74,7 @@ The workspace is split into these crates:
 | `weathertrack-core` | Shared logic — types, API URL building, JSON parsing, WMO weather codes, alerts. Platform-agnostic, testable on any host. |
 | `weathertrack-tui` | Ratatui-based terminal UI rendered on the ST7789 LCD via embedded-graphics. |
 | `weathertrack-view` | Presentation layer shared by every UI: formatted values, hourly window, chart geometry, sample data. Host-tested. |
-| `weathertrack-tui-ui` | The ratatui UI (charts from `tui-chart`), responsive: compact (≈53×17 cells, C6) and wide (≈102×30 cells with a touch tab bar, P4). |
+| `weathertrack-tui-ui` | The ratatui UI (charts from `tui-chart`, themes from `tui-nuances`), responsive: compact (≈53×17 cells, C6) and wide (≈102×30 cells with a touch tab bar, P4). |
 | `weathertrack-gui` | Slint UI for the C6's 320×172 LCD (BOOT button changes page). |
 | `weathertrack-p4` | 7" ESP32-P4 firmware (MIPI-DSI panel, GT911 touch, WiFi via the C6 coprocessor) with two UIs chosen by cargo feature: `slint-ui` (default) or `tui`. Its own crate because the P4 needs newer `esp-idf-*` crates. |
 | `weathertrack-p4-preview`, `-gui-preview`, `-tui-preview` | Host-side renderers: draw every page of a UI to PNG with sample data, so the UI can be checked without a board (`just preview-p4`, `preview-gui`, `preview-tui`). |

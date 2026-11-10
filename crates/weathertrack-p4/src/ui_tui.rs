@@ -15,7 +15,9 @@ use mousefood::embedded_graphics::{
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ratatui::{layout::Rect, Terminal};
 use weathertrack_core::app::Model;
-use weathertrack_tui_ui::{draw, draw_loading, refresh_at, tab_at, UiState, HOURS};
+use weathertrack_tui_ui::{
+    draw, draw_loading, refresh_at, tab_at, theme_at, theme_count, UiState, HOURS,
+};
 use weathertrack_view::ViewModel;
 
 use crate::hw::{self, Touch, TouchTracker, HEIGHT, WIDTH};
@@ -77,6 +79,7 @@ pub struct TuiUi {
     touch: TouchTracker,
     down_at: Option<(u16, u16)>,
     refresh: bool,
+    theme_changed: Option<usize>,
 }
 
 impl TuiUi {
@@ -102,6 +105,7 @@ impl TuiUi {
             touch: TouchTracker::default(),
             down_at: None,
             refresh: false,
+            theme_changed: None,
         })
     }
 
@@ -143,6 +147,10 @@ impl TuiUi {
         let area = self.area();
         if refresh_at(area, col, row) {
             self.refresh = true;
+        } else if theme_at(area, col, row) {
+            self.state.next_theme();
+            self.theme_changed = Some(self.state.theme);
+            self.redraw = true;
         } else if let Some(tab) = tab_at(area, col, row) {
             self.state.tab = tab;
             self.redraw = true;
@@ -172,6 +180,15 @@ impl Ui for TuiUi {
     fn set_refreshing(&mut self, refreshing: bool) {
         self.state.refreshing = refreshing;
         self.draw();
+    }
+
+    fn set_theme(&mut self, index: usize) {
+        self.state.theme = index % theme_count();
+        self.redraw = true;
+    }
+
+    fn take_theme_change(&mut self) -> Option<usize> {
+        self.theme_changed.take()
     }
 
     fn frame(&mut self) -> bool {

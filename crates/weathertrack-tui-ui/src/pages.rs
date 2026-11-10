@@ -16,6 +16,8 @@ use tui_chart::{
 
 pub const HEADER_ROWS: u16 = 2;
 pub const TAB_BAR_ROWS: u16 = 3;
+/// Width of the wide header's theme button ("[ Theme: name > ]"), right-aligned.
+pub const THEME_BUTTON_W: u16 = 30;
 
 pub fn screen(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     let density = Density::of(area);
@@ -76,16 +78,16 @@ fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, density
         area.left() + 1,
         area.top(),
         &vm.location,
-        theme::bold(theme::TEXT),
+        theme::bold(theme::c_text()),
     );
     match density {
         Density::Compact => {
             let (text, color) = if state.refreshing {
-                ("Refreshing...".to_string(), theme::MUTED)
+                ("Refreshing...".to_string(), theme::c_muted())
             } else if state.offline {
-                (format!("OFFLINE  {updated}"), theme::WARM)
+                (format!("OFFLINE  {updated}"), theme::c_warm())
             } else {
-                (updated.to_string(), theme::FAINT)
+                (updated.to_string(), theme::c_faint())
             };
             put_right(
                 buf,
@@ -104,6 +106,15 @@ fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, density
                 updated,
                 theme::faint(),
             );
+            let pill = format!("[ Theme: {} > ]", crate::theme_name(state.theme));
+            put(
+                buf,
+                area,
+                area.right().saturating_sub(width(&pill) + 1),
+                area.top() + 1,
+                &pill,
+                theme::muted(),
+            );
             let label = if state.refreshing {
                 "[ Refreshing... ]"
             } else {
@@ -117,9 +128,9 @@ fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, density
                 area.top(),
                 label,
                 theme::bold(if state.refreshing {
-                    theme::MUTED
+                    theme::c_muted()
                 } else {
-                    theme::ACCENT
+                    theme::c_accent()
                 }),
             );
             if state.offline {
@@ -130,7 +141,7 @@ fn header(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState, density
                     area.right().saturating_sub(w + 3 + width(&badge)),
                     area.top(),
                     &badge,
-                    theme::bold(theme::WARM),
+                    theme::bold(theme::c_warm()),
                 );
             }
         }
@@ -148,7 +159,11 @@ fn dots(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
             x,
             area.top(),
             if on { "●" } else { "○" },
-            theme::on_bg(if on { theme::ACCENT } else { theme::FAINT }),
+            theme::on_bg(if on {
+                theme::c_accent()
+            } else {
+                theme::c_faint()
+            }),
         );
         x += 2;
     }
@@ -163,9 +178,15 @@ fn dots(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
         x + 1,
         area.top(),
         &name,
-        theme::bold(theme::ACCENT),
+        theme::bold(theme::c_accent()),
     );
-    put_right(buf, area, area.top(), "BOOT: next page ", theme::faint());
+    put_right(
+        buf,
+        area,
+        area.top(),
+        &format!("{}  hold BOOT: theme ", crate::theme_name(state.theme)),
+        theme::faint(),
+    );
 }
 
 fn tab_bar(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
@@ -173,7 +194,11 @@ fn tab_bar(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
     for (i, name) in TABS.iter().enumerate() {
         let cell = Rect::new(area.left() + per * i as u16, area.top(), per, area.height);
         let on = i == state.tab;
-        let border = if on { theme::ACCENT } else { theme::BORDER };
+        let border = if on {
+            theme::c_accent()
+        } else {
+            theme::c_border()
+        };
         frame(buf, cell, "", border);
         let label = if i == 4 && !vm.alerts.is_empty() {
             format!("Alerts ({})", vm.alerts.len())
@@ -185,7 +210,11 @@ fn tab_bar(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
             cell,
             cell.top() + cell.height / 2,
             &label,
-            theme::bold(if on { theme::ACCENT } else { theme::MUTED }),
+            theme::bold(if on {
+                theme::c_accent()
+            } else {
+                theme::c_muted()
+            }),
         );
     }
 }
@@ -194,10 +223,10 @@ fn tab_bar(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
 
 fn art_color(tag: &str, is_day: bool) -> Color {
     match tag {
-        "SUN" if is_day => theme::WARM,
-        "RAN" | "DRZ" | "STM" => theme::RAIN,
+        "SUN" if is_day => theme::c_warm(),
+        "RAN" | "DRZ" | "STM" => theme::c_rain(),
         "SNW" => Color::Rgb(224, 242, 254),
-        _ => theme::MUTED,
+        _ => theme::c_muted(),
     }
 }
 
@@ -235,7 +264,7 @@ fn draw_big_temp(
         );
     }
     let end = x + big_width(&c.temperature, sx) as u16 + 1;
-    put(buf, area, end, y, "°C", theme::bold(theme::MUTED));
+    put(buf, area, end, y, "°C", theme::bold(theme::c_muted()));
     end + 2
 }
 
@@ -273,7 +302,7 @@ fn hour_strip(buf: &mut Buffer, area: Rect, vm: &ViewModel, count: usize, col_w:
             x,
             y + 3,
             &format!("{}%", h.rain_pct),
-            theme::on_bg(theme::RAIN),
+            theme::on_bg(theme::c_rain()),
         );
     }
 }
@@ -283,7 +312,7 @@ fn now_compact(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
     draw_art(buf, body, l + 1, t, c);
     let after = draw_big_temp(buf, body, l + 12, t, c, 1, 1);
     let rx = after.max(l + 24) + 1;
-    put(buf, body, rx, t, &c.condition, theme::bold(theme::TEXT));
+    put(buf, body, rx, t, &c.condition, theme::bold(theme::c_text()));
     put(
         buf,
         body,
@@ -321,7 +350,7 @@ fn now_compact(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         (
             "Humidity",
             c.humidity / 100.0,
-            theme::RAIN,
+            theme::c_rain(),
             format!("{:.0}%", c.humidity),
         ),
         (
@@ -333,7 +362,7 @@ fn now_compact(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         (
             "Cloud   ",
             c.cloud / 100.0,
-            theme::MUTED,
+            theme::c_muted(),
             format!("{:.0}%", c.cloud),
         ),
     ];
@@ -341,7 +370,7 @@ fn now_compact(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         let y = t + 6 + i as u16;
         put(buf, body, l + 1, y, name, theme::muted());
         gauge(buf, body, l + 10, y, 30, *frac, *color);
-        put(buf, body, l + 41, y, value, theme::bold(theme::TEXT));
+        put(buf, body, l + 41, y, value, theme::bold(theme::c_text()));
     }
     hour_strip(buf, body, vm, 6, 8, t + 10);
 }
@@ -363,7 +392,7 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         buf,
         left,
         if c.is_day { "Daytime" } else { "Night" },
-        theme::BORDER,
+        theme::c_border(),
     );
     draw_art(buf, inner, inner.left() + 2, inner.top() + 1, c);
     draw_big_temp(buf, inner, inner.left() + 16, inner.top() + 1, c, 2, 2);
@@ -373,7 +402,7 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         inner.left() + 2,
         inner.top() + 8,
         &c.condition,
-        theme::bold(theme::TEXT),
+        theme::bold(theme::c_text()),
     );
     put(
         buf,
@@ -404,7 +433,7 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
             "HUMIDITY",
             format!("{:.0}", c.humidity),
             "%",
-            Some((c.humidity / 100.0, theme::RAIN)),
+            Some((c.humidity / 100.0, theme::c_rain())),
             weathertrack_view::humidity_label(f64::from(c.humidity)).to_string(),
         ),
         tile(
@@ -432,7 +461,7 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
             "VISIBILITY",
             c.visibility.clone(),
             "km",
-            Some((c.cloud / 100.0, theme::MUTED)),
+            Some((c.cloud / 100.0, theme::c_muted())),
             format!("cloud cover {:.0}%", c.cloud),
         ),
         tile(
@@ -464,14 +493,14 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         if r.right() > body.right() {
             continue;
         }
-        let inner = frame(buf, r, title, theme::BORDER);
+        let inner = frame(buf, r, title, theme::c_border());
         put(
             buf,
             inner,
             inner.left() + 1,
             inner.top() + 1,
             &format!("{value} {unit}"),
-            theme::bold(theme::TEXT),
+            theme::bold(theme::c_text()),
         );
         for (k, line) in sub.lines().enumerate() {
             put(
@@ -503,7 +532,7 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
         body.height.saturating_sub(card_h),
     );
     if strip.height >= 6 {
-        let inner = frame(buf, strip, "Next hours", theme::BORDER);
+        let inner = frame(buf, strip, "Next hours", theme::c_border());
         hour_strip(buf, inner, vm, 8, 12, inner.top() + 1);
     }
 }
@@ -513,7 +542,7 @@ fn now_wide(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView) {
 fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
     let wide = d == Density::Wide;
     let area = if wide {
-        frame(buf, body, "Temperature - next 24 hours", theme::BORDER)
+        frame(buf, body, "Temperature - next 24 hours", theme::c_border())
     } else {
         body
     };
@@ -555,9 +584,9 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
             )
             .color(color)
     };
-    let mut lines = vec![series("Temp", |h| h.temp_val, theme::ACCENT)];
+    let mut lines = vec![series("Temp", |h| h.temp_val, theme::c_accent())];
     if wide {
-        lines.push(series("Feels like", |h| h.feels_val, theme::WARM));
+        lines.push(series("Feels like", |h| h.feels_val, theme::c_warm()));
     }
     let labels: Vec<String> = vm.hours.iter().step_by(4).map(|h| h.time.clone()).collect();
     let chart = LineChart::new(lines)
@@ -581,7 +610,7 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
             Axis::new()
                 .ticks(if wide { 5 } else { 3 })
                 .label_style(theme::muted())
-                .grid_style(theme::on_bg(theme::BORDER))
+                .grid_style(theme::on_bg(theme::c_border()))
                 .formatter(|v| format!("{v:.0}°"))
                 .grid(true),
         )
@@ -589,7 +618,8 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
             LegendPosition::TopRight
         } else {
             LegendPosition::None
-        });
+        })
+        .theme(theme::nuances());
     (&chart).render(chart_area, buf);
 
     put(
@@ -598,12 +628,14 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
         area.left() + 1,
         rain_area.top(),
         "Rain",
-        theme::on_bg(theme::RAIN),
+        theme::on_bg(theme::c_rain()),
     );
     // The sparkline draws one column per value: resample the hours to the plot width.
     let cols = usize::from(rain_area.width).max(2);
     let rain_data = (0..cols).map(|x| f64::from(vm.hours[x * (n - 1) / (cols - 1)].rain_pct));
-    let rain = Sparkline::new(rain_data).gradient([theme::FAINT, theme::RAIN]);
+    let rain = Sparkline::new(rain_data)
+        .gradient([theme::c_faint(), theme::c_rain()])
+        .theme(theme::nuances());
     (&rain).render(rain_area, buf);
 }
 
@@ -612,7 +644,7 @@ fn hourly(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
 fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
     let wide = d == Density::Wide;
     let area = if wide {
-        frame(buf, body, "7-day forecast (low to high)", theme::BORDER)
+        frame(buf, body, "7-day forecast (low to high)", theme::c_border())
     } else {
         body
     };
@@ -645,7 +677,8 @@ fn week(body: Rect, buf: &mut Buffer, vm: &ViewModel, d: Density) {
     let chart = LollipopChart::new(items)
         .sorted(false)
         .show_values(true)
-        .head('●');
+        .head('●')
+        .theme(theme::nuances());
     (&chart).render(area, buf);
 }
 
@@ -666,7 +699,7 @@ fn details(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView, d: Den
             ch,
         );
         let inner = if d == Density::Wide {
-            frame(buf, cell, CARD_TITLES[usize::from(idx)], theme::BORDER)
+            frame(buf, cell, CARD_TITLES[usize::from(idx)], theme::c_border())
         } else {
             put(
                 buf,
@@ -674,7 +707,7 @@ fn details(body: Rect, buf: &mut Buffer, vm: &ViewModel, c: &CurrentView, d: Den
                 cell.left() + 1,
                 cell.top(),
                 CARD_TITLES[usize::from(idx)],
-                theme::bold(theme::MUTED),
+                theme::bold(theme::c_muted()),
             );
             Rect::new(
                 cell.left(),
@@ -714,7 +747,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
             x + big_width(digits, 1) as u16 + 2,
             r.top() + 5,
             unit,
-            theme::bold(theme::MUTED),
+            theme::bold(theme::c_muted()),
         );
         r.top() + 7
     };
@@ -727,7 +760,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                 x,
                 y,
                 &format!("Sunrise  {}", c.sunrise),
-                theme::bold(theme::TEXT),
+                theme::bold(theme::c_text()),
             );
             put(
                 buf,
@@ -735,7 +768,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                 x,
                 y + 1,
                 &format!("Sunset   {}", c.sunset),
-                theme::bold(theme::TEXT),
+                theme::bold(theme::c_text()),
             );
             put(
                 buf,
@@ -752,12 +785,12 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                 y + 3 + 2 * u16::from(wide),
                 bw,
                 c.sun_progress,
-                theme::WARM,
+                theme::c_warm(),
             );
         }
         1 => {
             let y = if wide {
-                head(buf, &c.wind_speed, "km/h", theme::TEXT)
+                head(buf, &c.wind_speed, "km/h", theme::c_text())
             } else {
                 put(
                     buf,
@@ -765,7 +798,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                     x,
                     r.top(),
                     &format!("{} km/h {}", c.wind_speed, c.wind_dir),
-                    theme::bold(theme::TEXT),
+                    theme::bold(theme::c_text()),
                 );
                 r.top() + 1
             };
@@ -788,7 +821,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
         }
         2 => {
             let y = if wide {
-                head(buf, &format!("{:.0}", c.humidity), "%", theme::RAIN)
+                head(buf, &format!("{:.0}", c.humidity), "%", theme::c_rain())
             } else {
                 put(
                     buf,
@@ -800,11 +833,11 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                         c.humidity,
                         weathertrack_view::humidity_label(f64::from(c.humidity))
                     ),
-                    theme::bold(theme::TEXT),
+                    theme::bold(theme::c_text()),
                 );
                 r.top() + 1
             };
-            gauge(buf, r, x, y, bw, c.humidity / 100.0, theme::RAIN);
+            gauge(buf, r, x, y, bw, c.humidity / 100.0, theme::c_rain());
             put(
                 buf,
                 r,
@@ -837,7 +870,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
         }
         4 => {
             let y = if wide {
-                head(buf, &c.pressure, "hPa", theme::MUTED)
+                head(buf, &c.pressure, "hPa", theme::c_muted())
             } else {
                 put(
                     buf,
@@ -845,7 +878,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                     x,
                     r.top(),
                     &format!("{} hPa  {}", c.pressure, c.pressure_label),
-                    theme::bold(theme::TEXT),
+                    theme::bold(theme::c_text()),
                 );
                 r.top() + 1
             };
@@ -857,7 +890,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                 y,
                 bw,
                 ((p - 970.0) / 70.0).clamp(0.0, 1.0),
-                theme::MUTED,
+                theme::c_muted(),
             );
             put(
                 buf,
@@ -870,7 +903,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
         }
         _ => {
             let y = if wide {
-                head(buf, &c.precip, "mm now", theme::RAIN)
+                head(buf, &c.precip, "mm now", theme::c_rain())
             } else {
                 put(
                     buf,
@@ -878,7 +911,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
                     x,
                     r.top(),
                     &format!("{} mm now", c.precip),
-                    theme::bold(theme::TEXT),
+                    theme::bold(theme::c_text()),
                 );
                 r.top() + 1
             };
@@ -906,7 +939,7 @@ fn detail_card(buf: &mut Buffer, r: Rect, idx: usize, c: &CurrentView, wide: boo
 
 fn alerts(body: Rect, buf: &mut Buffer, alerts: &[AlertView], d: Density) {
     let area = if d == Density::Wide {
-        frame(buf, body, "Alerts", theme::BORDER)
+        frame(buf, body, "Alerts", theme::c_border())
     } else {
         body
     };
@@ -917,7 +950,7 @@ fn alerts(body: Rect, buf: &mut Buffer, alerts: &[AlertView], d: Density) {
             area,
             mid.saturating_sub(1),
             "No active weather alerts",
-            theme::bold(theme::GOOD),
+            theme::bold(theme::c_good()),
         );
         put_center(
             buf,
@@ -945,7 +978,7 @@ fn alerts(body: Rect, buf: &mut Buffer, alerts: &[AlertView], d: Density) {
             area.left() + 3,
             y,
             &a.event,
-            theme::bold(theme::TEXT),
+            theme::bold(theme::c_text()),
         );
         put_right(
             buf,
@@ -1016,7 +1049,8 @@ fn dial(
         .style(style)
         .range(range.0, range.1)
         .bands(bands.iter().copied())
-        .label(label);
+        .label(label)
+        .theme(theme::nuances());
     (&g).render(area, buf);
 }
 
@@ -1036,7 +1070,7 @@ fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentV
                 GaugeStyle::Smooth,
                 f64::from(c.sun_progress),
                 (0.0, 1.0),
-                &[(1.0, theme::WARM)],
+                &[(1.0, theme::c_warm())],
                 c.daylight.clone(),
             );
             put(
@@ -1045,14 +1079,14 @@ fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentV
                 x,
                 r.top(),
                 &format!("Sunrise {}    Sunset {}", c.sunrise, c.sunset),
-                theme::bold(theme::TEXT),
+                theme::bold(theme::c_text()),
             );
             put(buf, r, x, text_y, "Sun position today", theme::faint());
         }
         1 => {
             let bands = [
-                (20.0, theme::GOOD),
-                (40.0, theme::WARM),
+                (20.0, theme::c_good()),
+                (40.0, theme::c_warm()),
                 (100.0, Color::Rgb(239, 68, 68)),
             ];
             dial(
@@ -1080,7 +1114,7 @@ fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentV
                 GaugeStyle::Ring,
                 f64::from(c.humidity),
                 (0.0, 100.0),
-                &[(100.0, theme::RAIN)],
+                &[(100.0, theme::c_rain())],
                 format!("{:.0}%", c.humidity),
             );
             put(
@@ -1117,9 +1151,9 @@ fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentV
         }
         4 => {
             let bands = [
-                (1000.0, theme::MUTED),
-                (1020.0, theme::ACCENT),
-                (1040.0, theme::WARM),
+                (1000.0, theme::c_muted()),
+                (1020.0, theme::c_accent()),
+                (1040.0, theme::c_warm()),
             ];
             dial(
                 buf,
@@ -1139,7 +1173,7 @@ fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentV
                 x,
                 r.top(),
                 &format!("{} mm now", c.precip),
-                theme::bold(theme::TEXT),
+                theme::bold(theme::c_text()),
             );
             put(
                 buf,
@@ -1153,7 +1187,9 @@ fn wide_card(buf: &mut Buffer, r: Rect, idx: usize, vm: &ViewModel, c: &CurrentV
             if !vm.hours.is_empty() {
                 let n = vm.hours.len();
                 let data = (0..w).map(|i| f64::from(vm.hours[i * (n - 1) / (w - 1)].rain_pct));
-                let spark = Sparkline::new(data).gradient([theme::FAINT, theme::RAIN]);
+                let spark = Sparkline::new(data)
+                    .gradient([theme::c_faint(), theme::c_rain()])
+                    .theme(theme::nuances());
                 (&spark).render(
                     Rect::new(x, r.top() + 3, r.width - 2, r.height.saturating_sub(5)),
                     buf,

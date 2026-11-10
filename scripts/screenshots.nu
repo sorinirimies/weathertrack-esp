@@ -16,6 +16,8 @@ export const SHOTS = [
     ["tui-ui/p4-3-7days.png" "p4-tui-week.png"]
     ["tui-ui/p4-4-details.png" "p4-tui-details.png"]
     ["tui-ui/c6-3-7days.png" "c6-tui-week.png"]
+    ["tui-ui/themes/p4-today-nord.png" "p4-tui-nord.png"]
+    ["tui-ui/themes/c6-today-catppuccin-latte.png" "c6-tui-latte.png"]
 ]
 
 # The (from, to) absolute path pairs for `shots` under `root`.

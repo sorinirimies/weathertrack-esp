@@ -650,6 +650,7 @@ version = "0.1.0"
 dependencies = [
  "ratatui",
  "tui-chart",
+ "tui-nuances",
  "weathertrack-view",
 ]
 

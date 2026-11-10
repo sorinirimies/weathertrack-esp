@@ -89,8 +89,12 @@ preview-gui:
 preview-tui:
     cd crates/weathertrack-tui-preview; cargo run --release -- ../../target/tui-ui
 
+# Render the terminal UI in every selectable theme → target/tui-ui/themes/
+preview-themes:
+    cd crates/weathertrack-tui-preview; with-env {THEMES: "1"} { cargo run --release -- ../../target/tui-ui }
+
 # Refresh the screenshots in docs/screenshots/ from the previews
-screenshots: preview-p4 preview-gui preview-tui
+screenshots: preview-p4 preview-gui preview-tui preview-themes
     nu scripts/screenshots.nu
 
 # Generate crates/weathertrack-p4/sdkconfig.defaults (absolute partition path)

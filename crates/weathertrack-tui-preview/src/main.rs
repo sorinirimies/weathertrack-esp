@@ -14,7 +14,7 @@ use mousefood::embedded_graphics::{
 };
 use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ratatui::Terminal;
-use weathertrack_tui_ui::{draw, UiState, HOURS, TABS};
+use weathertrack_tui_ui::{HOURS, TABS, UiState, draw, theme_count, theme_name};
 use weathertrack_view::{sample, ViewModel};
 
 /// A pixel buffer standing in for the LCD.
@@ -98,17 +98,50 @@ fn main() {
     std::fs::create_dir_all(&dir).expect("out dir");
     let vm = ViewModel::from_model(&sample::model(std::env::var("ALERTS").is_ok()), HOURS);
     let offline = std::env::var("OFFLINE").is_ok();
-
-    for (name, w, h, font, scale) in [
+    // THEME=nord (name) or THEME=3 (index); THEMES=1 renders the Today and Hourly pages of every theme.
+    let theme = std::env::var("THEME").ok().map_or(0, |t| {
+        t.parse().unwrap_or_else(|_| {
+            (0..theme_count())
+                .find(|&i| theme_name(i) == t)
+                .unwrap_or(0)
+        })
+    });
+    let screens = [
         ("c6", 320, 172, fonts::MONO_6X10, 3),
         ("p4", 1024, 600, fonts::MONO_10X20, 1),
-    ] {
-        println!("{name}");
+    ];
+
+    if std::env::var("THEMES").is_ok() {
+        std::fs::create_dir_all(format!("{dir}/themes")).expect("themes dir");
+        for i in 0..theme_count() {
+            for (name, w, h, font, scale) in &screens {
+                for (tab, page) in [(0, "today"), (1, "hourly"), (3, "details")] {
+                    let state = UiState {
+                        tab,
+                        offline,
+                        theme: i,
+                        ..UiState::default()
+                    };
+                    let screen = render(*w, *h, font.clone(), &vm, &state);
+                    save(
+                        &format!("{dir}/themes/{name}-{page}-{}.png", theme_name(i)),
+                        &screen,
+                        *scale,
+                    );
+                }
+            }
+        }
+        return;
+    }
+
+    for (name, w, h, font, scale) in screens {
+        println!("{name} (theme {})", theme_name(theme));
         for (tab, label) in TABS.iter().enumerate() {
             let state = UiState {
                 tab,
                 offline,
-                refreshing: false,
+                theme,
+                ..UiState::default()
             };
             let screen = render(w, h, font.clone(), &vm, &state);
             save(

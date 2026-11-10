@@ -42,6 +42,11 @@ const DEFAULTS: nvs::ConfigDefaults = nvs::ConfigDefaults {
     location: "Cluj-Napoca",
 };
 
+/// NVS key of the selected colour theme.
+const THEME_KEY: &str = "theme";
+/// Holding BOOT this long (ms) changes the theme instead of the page.
+const HOLD_MS: u32 = 800;
+
 fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -245,16 +250,37 @@ fn main() {
     let mut last_fetch: u32 = 0;
     let mut ui_state = UiState {
         offline: model.error.is_some(),
+        // the theme chosen last time (hold BOOT to change it)
+        theme: nvs_store
+            .get_u8(THEME_KEY)
+            .ok()
+            .flatten()
+            .map_or(0, usize::from)
+            % weathertrack_tui_ui::theme_count(),
         ..UiState::default()
     };
+    let mut pressed_at: Option<u32> = None;
     let mut view = ViewModel::from_model(&model, HOURS);
     let mut redraw = true;
 
     loop {
-        // Input: the BOOT button flips to the next page
+        // Input: a short BOOT press flips to the next page, holding it (>= 0.8 s) the next theme
         let btn = button.is_low();
         if btn && !btn_prev {
-            ui_state.next_tab();
+            pressed_at = Some(ticks);
+        }
+        if !btn && btn_prev {
+            let held = pressed_at.take().map_or(0, |t| ticks.wrapping_sub(t));
+            if held >= HOLD_MS {
+                ui_state.next_theme();
+                let _ = nvs_store.set_u8(THEME_KEY, ui_state.theme as u8);
+                log::info!(
+                    "theme -> {}",
+                    weathertrack_tui_ui::theme_name(ui_state.theme)
+                );
+            } else {
+                ui_state.next_tab();
+            }
             redraw = true;
         }
         btn_prev = btn;

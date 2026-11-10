@@ -31,6 +31,8 @@ pub struct UiState {
     pub offline: bool,
     /// A refresh is running.
     pub refreshing: bool,
+    /// Index of the selected colour theme ([`theme_count`], [`theme_name`]).
+    pub theme: usize,
 }
 
 impl UiState {
@@ -40,6 +42,20 @@ impl UiState {
     pub fn prev_tab(&mut self) {
         self.tab = (self.tab + TABS.len() - 1) % TABS.len();
     }
+    /// Select the next colour theme (wraps around).
+    pub fn next_theme(&mut self) {
+        self.theme = (self.theme + 1) % theme_count();
+    }
+}
+
+/// How many colour themes can be selected.
+pub fn theme_count() -> usize {
+    theme::count()
+}
+
+/// Name of theme `index` (wraps around): "weathertrack", "nord", "dracula", ...
+pub fn theme_name(index: usize) -> &'static str {
+    &theme::entry(index).name
 }
 
 /// How much room there is.
@@ -69,6 +85,7 @@ pub fn draw(frame: &mut Frame, vm: &ViewModel, state: &UiState) {
 
 /// Draw the whole screen into `buf`.
 pub fn render(area: Rect, buf: &mut Buffer, vm: &ViewModel, state: &UiState) {
+    theme::select(state.theme);
     widgets::clear(buf, area);
     pages::screen(area, buf, vm, state);
 }
@@ -81,6 +98,7 @@ pub fn draw_loading(frame: &mut Frame, status: &str, progress: f32) {
 
 /// [`draw_loading`] into a plain buffer.
 pub fn render_loading(area: Rect, buf: &mut Buffer, status: &str, progress: f32) {
+    theme::select(0);
     widgets::clear(buf, area);
     let mid = area.top() + area.height / 2;
     widgets::put_center(
@@ -88,12 +106,20 @@ pub fn render_loading(area: Rect, buf: &mut Buffer, status: &str, progress: f32)
         area,
         mid.saturating_sub(3),
         "WeatherTrack",
-        theme::bold(theme::TEXT),
+        theme::bold(theme::c_text()),
     );
     widgets::put_center(buf, area, mid.saturating_sub(1), status, theme::muted());
     let w = (area.width / 2).clamp(10, 60);
     let x = area.left() + area.width.saturating_sub(w) / 2;
-    widgets::gauge(buf, area, x, mid + 1, w, progress.max(0.04), theme::ACCENT);
+    widgets::gauge(
+        buf,
+        area,
+        x,
+        mid + 1,
+        w,
+        progress.max(0.04),
+        theme::c_accent(),
+    );
 }
 
 /// Which tab a tap at cell (`col`, `row`) hits, for the wide layout's tab bar.
@@ -111,9 +137,14 @@ pub fn tab_at(area: Rect, col: u16, row: u16) -> Option<usize> {
     ))
 }
 
-/// Whether a tap at (`col`, `row`) hits the refresh button of the wide header.
+/// Whether a tap at (`col`, `row`) hits the refresh button of the wide header (first row, right).
 pub fn refresh_at(area: Rect, col: u16, row: u16) -> bool {
-    Density::of(area) == Density::Wide && row < pages::HEADER_ROWS && col + 14 >= area.right()
+    Density::of(area) == Density::Wide && row == 0 && col + 18 >= area.right()
+}
+
+/// Whether a tap hits the theme button of the wide header (second row, right).
+pub fn theme_at(area: Rect, col: u16, row: u16) -> bool {
+    Density::of(area) == Density::Wide && row == 1 && col + pages::THEME_BUTTON_W >= area.right()
 }
 
 #[cfg(test)]
@@ -145,6 +176,7 @@ mod tests {
                 tab,
                 offline,
                 refreshing: false,
+                ..UiState::default()
             },
         );
         text(&buf)
@@ -237,6 +269,7 @@ mod tests {
                         tab,
                         offline: true,
                         refreshing: true,
+                        ..UiState::default()
                     },
                 );
             }
@@ -281,6 +314,85 @@ mod tests {
             "x",
             1.0,
         );
+    }
+
+    #[test]
+    fn every_theme_renders_every_page_at_both_sizes() {
+        let vm = ViewModel::from_model(&sample::model(true), HOURS);
+        for theme in 0..theme_count() {
+            for (w, h) in [COMPACT, WIDE] {
+                for tab in 0..TABS.len() {
+                    let area = Rect::new(0, 0, w, h);
+                    let mut buf = Buffer::empty(area);
+                    render(
+                        area,
+                        &mut buf,
+                        &vm,
+                        &UiState {
+                            tab,
+                            theme,
+                            ..UiState::default()
+                        },
+                    );
+                    let s = text(&buf);
+                    assert!(
+                        s.contains("Cluj-Napoca"),
+                        "{} {w}x{h} tab {tab}",
+                        theme_name(theme)
+                    );
+                    // every cell uses the theme's background, never the terminal default
+                    let bg = theme::entry(theme).palette.bg;
+                    assert!(
+                        buf.content()
+                            .iter()
+                            .all(|c| c.bg == bg || c.bg == ratatui::style::Color::Reset),
+                        "{}",
+                        theme_name(theme)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_selected_theme_is_named_in_the_footer_or_header() {
+        let vm = ViewModel::from_model(&sample::model(false), HOURS);
+        for (w, h) in [COMPACT, WIDE] {
+            let area = Rect::new(0, 0, w, h);
+            let mut buf = Buffer::empty(area);
+            render(
+                area,
+                &mut buf,
+                &vm,
+                &UiState {
+                    theme: 2,
+                    ..UiState::default()
+                },
+            );
+            assert!(text(&buf).contains(theme_name(2)), "{w}x{h}");
+        }
+    }
+
+    #[test]
+    fn next_theme_wraps_and_the_theme_button_is_hit_in_the_wide_header() {
+        let mut s = UiState {
+            theme: theme_count() - 1,
+            ..UiState::default()
+        };
+        s.next_theme();
+        assert_eq!(s.theme, 0);
+        let wide = Rect::new(0, 0, WIDE.0, WIDE.1);
+        assert!(theme_at(wide, WIDE.0 - 2, 1));
+        assert!(
+            !theme_at(wide, WIDE.0 - 2, 0),
+            "row 0 is the refresh button"
+        );
+        assert!(!refresh_at(wide, WIDE.0 - 2, 1));
+        assert!(!theme_at(
+            Rect::new(0, 0, COMPACT.0, COMPACT.1),
+            COMPACT.0 - 2,
+            1
+        ));
     }
 
     #[test]

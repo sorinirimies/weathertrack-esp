@@ -12,4 +12,10 @@ pub trait Ui {
     fn set_refreshing(&mut self, refreshing: bool);
     /// Poll the touch panel, redraw if anything changed; true when the user asked for a refresh.
     fn frame(&mut self) -> bool;
+    /// Select a colour theme (only the terminal UI has themes).
+    fn set_theme(&mut self, _index: usize) {}
+    /// The theme the user just picked on screen, if they did (to persist it).
+    fn take_theme_change(&mut self) -> Option<usize> {
+        None
+    }
 }

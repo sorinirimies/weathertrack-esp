@@ -90,3 +90,16 @@ pub fn load_forecast(nvs: &EspNvs<NvsDefault>, place: &str) -> Option<Forecast> 
     let bytes = nvs.get_blob(FORECAST_KEY, &mut buf).ok().flatten()?;
     deserialize_forecast(std::str::from_utf8(bytes).ok()?).ok()
 }
+
+const THEME_KEY: &str = "theme";
+
+/// The colour theme chosen last time (terminal UI), 0 if none.
+pub fn load_theme(nvs: &EspNvs<NvsDefault>) -> usize {
+    nvs.get_u8(THEME_KEY).ok().flatten().map_or(0, usize::from)
+}
+
+pub fn save_theme(nvs: &mut EspNvs<NvsDefault>, theme: usize) {
+    if let Err(e) = nvs.set_u8(THEME_KEY, theme as u8) {
+        log::warn!("theme write failed: {e:?}");
+    }
+}
