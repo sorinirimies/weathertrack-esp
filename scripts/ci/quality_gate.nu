@@ -43,13 +43,16 @@ def main [--skip-fmt, --skip-test, --skip-nu] {
     if not $skip_test {
         $ok = (run_step "cargo test --workspace" { cargo test --workspace --all-features }) and $ok
     }
-    # Host-side checks of the P4 UI (same .slint + bridge as the firmware); the firmware
-    # itself needs the ESP toolchain and is built with `just check-firmware`.
+    # Host-side checks of the firmware UIs (same .slint files, bridge and ratatui code as the
+    # firmware, drawn to PNG); the firmware itself needs the ESP toolchain and is built with
+    # `just check-firmware`.
     if not $skip_test {
-        $ok = (run_step "P4 UI preview crate (tests)" {
-            cd crates/weathertrack-p4-preview
-            cargo test --release
-        }) and $ok
+        for crate in [weathertrack-p4-preview weathertrack-gui-preview weathertrack-tui-preview] {
+            $ok = (run_step $"UI preview crate ($crate) \(tests)" {
+                cd $"crates/($crate)"
+                cargo test --release
+            }) and $ok
+        }
     }
     $ok = (run_step "cargo doc (warnings are errors)" {
         with-env { RUSTDOCFLAGS: "-D warnings" } { cargo doc --no-deps --all-features --quiet }

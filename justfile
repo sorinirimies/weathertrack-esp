@@ -77,9 +77,21 @@ check-firmware: build-tui-release build-gui-release build-p4-release
 
 # ── ESP32-P4 · Waveshare 7" touch (crates/weathertrack-p4) ────────────────────
 
-# Render every P4 UI tab to PNG on the host (no hardware needed) → target/p4-ui/
+# Render every P4 Slint page to PNG on the host (no hardware needed) → target/p4-ui/
 preview-p4:
     cd crates/weathertrack-p4-preview; cargo run --release -- ../../target/p4-ui
+
+# Render every C6 Slint page (320x172, shown 3x) to PNG → target/gui-ui/
+preview-gui:
+    cd crates/weathertrack-gui-preview; cargo run --release -- ../../target/gui-ui
+
+# Render the terminal UI for both screens (C6 compact, P4 wide) through mousefood → target/tui-ui/
+preview-tui:
+    cd crates/weathertrack-tui-preview; cargo run --release -- ../../target/tui-ui
+
+# Refresh the screenshots in docs/screenshots/ from the previews
+screenshots: preview-p4 preview-gui preview-tui
+    nu scripts/screenshots.nu
 
 # Generate crates/weathertrack-p4/sdkconfig.defaults (absolute partition path)
 gen-sdkconfig-p4:
@@ -93,13 +105,17 @@ build-p4: gen-sdkconfig-p4
 build-p4-release: gen-sdkconfig-p4
     cd crates/weathertrack-p4; cargo build --release
 
+# Build the P4 firmware with the terminal UI (ratatui) instead of Slint (release)
+build-p4-tui-release: gen-sdkconfig-p4
+    cd crates/weathertrack-p4; cargo build --release --no-default-features --features tui
+
 # Flash the release firmware to the P4 and open the serial monitor
 flash-p4 port="": build-p4-release
     nu scripts/esp.nu flash-p4 --port "{{ port }}"
 
-# Back up the parts of the P4 flash worth keeping before overwriting it (≈10 min, USB is slow)
-backup-p4 port="":
-    nu scripts/esp.nu backup-p4 --port "{{ port }}"
+# Back up the parts of the board's flash worth keeping before overwriting them (any chip; USB is slow: minutes)
+backup port="":
+    nu scripts/esp.nu backup --port "{{ port }}"
 
 # ── Test & quality ────────────────────────────────────────────────────────────
 

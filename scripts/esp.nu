@@ -8,7 +8,7 @@
 #   nu scripts/esp.nu gen-sdkconfig          # tui + gui sdkconfig.defaults
 #   nu scripts/esp.nu gen-sdkconfig-p4       # p4 sdkconfig.defaults from the .in file
 #   nu scripts/esp.nu flash-p4 [--port P]    # flash the release P4 build and monitor
-#   nu scripts/esp.nu backup-p4 [--port P]   # dump the parts of the P4 flash worth keeping
+#   nu scripts/esp.nu backup [--port P]      # any chip: partition table, boot area, each app's real size
 # ──────────────────────────────────────────────────────────────────────────────
 
 const ROOT = path self ..
@@ -19,7 +19,7 @@ export const C6_CRATES = ["weathertrack-tui" "weathertrack-gui"]
 # sdkconfig.defaults for a C6 crate; `partitions` is the absolute path of its CSV.
 export def c6_sdkconfig [partitions: string]: nothing -> string {
     [
-        "CONFIG_ESP_MAIN_TASK_STACK_SIZE=65536"
+        "CONFIG_ESP_MAIN_TASK_STACK_SIZE=40960"
         "CONFIG_ESP_WIFI_ENABLED=y"
         "CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y"
         "CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y"
@@ -53,6 +53,45 @@ export def p4_flash_args [bootloader: path, image: path, port: string]: nothing 
     [...$base ...$port_args $image]
 }
 
+# Little-endian unsigned integer from `n` bytes at `at`.
+export def le [bytes: binary, at: int, n: int]: nothing -> int {
+    $bytes | bytes at $at..<($at + $n) | into int --endian little
+}
+
+# Partition table entries from the raw table bytes (0x8000 in flash, 32 B per entry).
+export def parse_ptable [bytes: binary]: nothing -> table {
+    0..(($bytes | bytes length) // 32 - 1)
+    | each {|i|
+        let e = $bytes | bytes at ($i * 32)..<($i * 32 + 32)
+        if ($e | bytes at 0..<2) != 0x[aa 50] { null } else {
+            {
+                name: ($e | bytes at 12..<28 | bytes split 0x[00] | first | decode utf-8)
+                type: (le $e 2 1)
+                subtype: (le $e 3 1)
+                offset: (le $e 4 4)
+                size: (le $e 8 4)
+            }
+        }
+    }
+    | take while {|r| $r != null }
+}
+
+# Bytes an app image really occupies, read through `read: {|offset, len| binary}`;
+# null when there is no image (erased partition).
+export def image_size [read: closure, offset: int]: nothing -> any {
+    let head = do $read $offset 24
+    if ($head | bytes at 0..<1) != 0x[e9] { return null }
+    mut pos = 24
+    for _ in 0..<(le $head 1 1) {
+        let seg = do $read ($offset + $pos) 8
+        $pos = $pos + 8 + (le $seg 4 4)
+    }
+    # + checksum byte padded to 16, + 32-byte SHA-256 digest
+    (($pos + 1 + 15) // 16) * 16 + 32
+}
+
+def hex [n: int]: nothing -> string { $n | format number | get lowerhex }
+
 def "main gen-sdkconfig" [] {
     for crate in $C6_CRATES {
         let dir = $ROOT | path join crates $crate
@@ -79,15 +118,30 @@ def "main flash-p4" [--port: string = ""] {
     ^espflash ...(p4_flash_args $bl ($out | path join weathertrack-p4) $port)
 }
 
-# Parts of the P4 flash worth keeping (a full 32 MB read takes about an hour over USB):
-# partition table, bootloader + NVS area, and the factory app.
-def "main backup-p4" [--port: string = "", --dir: path = "backups"] {
+# Parts of the flash worth keeping, read over USB (~10 KB/s, so no full dump): the partition
+# table, everything before the first app (bootloader, NVS, otadata) and each app's real size.
+def "main backup" [--port: string = "", --dir: path = "backups"] {
     mkdir $dir
     let p = if ($port | is-empty) { [] } else { ["--port" $port] }
-    ^espflash read-flash ...$p "0x8000" "0x1000" ($dir | path join ptable.bin)
-    ^espflash read-flash ...$p "0" "0x110000" ($dir | path join p4-0x0-boot-nvs.bin)
-    ^espflash read-flash ...$p "0x110000" "0x560000" ($dir | path join p4-factory-app-0x110000.bin)
-    print $"Backed up to ($dir). Restore with: espflash write-bin 0x0 <boot-nvs.bin>; espflash write-bin 0x110000 <factory-app.bin>"
+    let tmp = mktemp
+    let read = {|off: int, len: int|
+        ^espflash read-flash ...$p (hex $off) (hex $len) $tmp | complete | ignore
+        open --raw $tmp
+    }
+    do $read 0x8000 0x1000 | save -f ($dir | path join ptable.bin)
+    let table = parse_ptable (open --raw ($dir | path join ptable.bin))
+    if ($table | is-empty) { error make { msg: "no partition table at 0x8000 (is this an ESP board in a normal boot?)" } }
+    let apps = $table | where type == 0 | sort-by offset
+    let first_app = $apps | get -o 0.offset | default 0x10000
+    ^espflash read-flash ...$p 0 (hex $first_app) ($dir | path join $"boot-and-data-0x0.bin")
+    for app in $apps {
+        let size = image_size $read $app.offset
+        if $size == null { print $"($app.name): empty, skipped"; continue }
+        let file = $dir | path join $"($app.name)-(hex $app.offset).bin"
+        ^espflash read-flash ...$p (hex $app.offset) (hex $size) $file
+    }
+    rm -f $tmp
+    print $"Backed up to ($dir). Restore with: espflash write-bin 0x0 <boot-and-data-0x0.bin>; espflash write-bin <offset> <app.bin>"
 }
 
 def main [] { help main }

@@ -17,16 +17,32 @@ A multi-frontend weather station for ESP32 boards, powered by [Open-Meteo](https
 - **7-day forecast** with auto-refresh every 5 minutes
 - **RGB LED status indicator** (WS2812 on GPIO8)
 - **BOOT button page navigation** (GPIO9) — cycle through forecast days
+- **Two UI styles per board**, same data and look: a graphical Slint UI and a terminal (ratatui) UI, on the C6's 320×172 LCD and the P4's 1024×600 touch panel
 - **ESP32-P4 7" touch app** (`weathertrack-p4`): five touch tabs — today, 24-hour temperature chart, 7-day forecast, details (sun arc, wind, UV, pressure) and alerts; WiFi through the board's ESP32-C6 coprocessor
+
+## Screenshots
+
+Rendered on the host from the same code and fonts the firmware uses (`just screenshots`).
+
+| | Graphical (Slint) | Terminal (ratatui) |
+|---|---|---|
+| **ESP32-P4, 7" touch** (1024×600) | ![P4 Slint](docs/screenshots/p4-slint-today.png) | ![P4 TUI](docs/screenshots/p4-tui-today.png) |
+| **ESP32-C6, 1.47" LCD** (320×172, shown 3×) | ![C6 Slint](docs/screenshots/c6-slint-today.png) | ![C6 TUI](docs/screenshots/c6-tui-today.png) |
+
+The Slint UIs also have an hourly temperature chart:
+
+![P4 hourly](docs/screenshots/p4-slint-hourly.png)
 
 ## Architecture
 
 The project follows the **Elm architecture** pattern: `Model → Msg → update → view`.
 
 ```
-weathertrack-tui ──┐
-weathertrack-gui ──┼──▶ weathertrack-core ──▶ Open-Meteo API
-weathertrack-p4  ──┘
+weathertrack-tui ─┐                          ┌─ weathertrack-tui-ui (ratatui)
+weathertrack-gui ─┼─▶ weathertrack-view ◀────┤
+weathertrack-p4  ─┘        │                 └─ Slint bridge (weathertrack-view/slint)
+                           ▼
+                   weathertrack-core ──▶ Open-Meteo API
 ```
 
 The workspace is split into these crates:
@@ -35,9 +51,11 @@ The workspace is split into these crates:
 |-------|---------|
 | `weathertrack-core` | Shared logic — types, API URL building, JSON parsing, WMO weather codes, alerts. Platform-agnostic, testable on any host. |
 | `weathertrack-tui` | Ratatui-based terminal UI rendered on the ST7789 LCD via embedded-graphics. |
-| `weathertrack-gui` | Slint-based declarative GUI rendered on the ST7789 LCD. |
-| `weathertrack-p4` | Slint touch UI for the 7" ESP32-P4 board (MIPI-DSI panel, GT911 touch, WiFi via the C6 coprocessor). Its own crate because the P4 needs newer `esp-idf-*` crates. |
-| `weathertrack-p4-preview` | Host-side renderer: draws every P4 tab to PNG with sample data, so the UI can be checked without a board (`just preview-p4`). |
+| `weathertrack-view` | Presentation layer shared by every UI: formatted values, hourly window, chart geometry, sample data. Host-tested. |
+| `weathertrack-tui-ui` | The ratatui UI, responsive: compact (≈53×17 cells, C6) and wide (≈102×30 cells with a touch tab bar, P4). |
+| `weathertrack-gui` | Slint UI for the C6's 320×172 LCD (BOOT button changes page). |
+| `weathertrack-p4` | 7" ESP32-P4 firmware (MIPI-DSI panel, GT911 touch, WiFi via the C6 coprocessor) with two UIs chosen by cargo feature: `slint-ui` (default) or `tui`. Its own crate because the P4 needs newer `esp-idf-*` crates. |
+| `weathertrack-p4-preview`, `-gui-preview`, `-tui-preview` | Host-side renderers: draw every page of a UI to PNG with sample data, so the UI can be checked without a board (`just preview-p4`, `preview-gui`, `preview-tui`). |
 | `weathertrack-hal` | ESP32 hardware helpers shared by the C6 firmware. |
 
 The core crate has no ESP32 dependencies and is the only workspace member. The firmware crates are excluded from the workspace (they need the ESP toolchain and their own `.cargo/config.toml`) and build separately.
@@ -92,6 +110,7 @@ The core crate has no ESP32 dependencies and is the only workspace member. The f
    just run-tui-release    # Ratatui frontend, ESP32-C6
    just run-gui-release    # Slint frontend, ESP32-C6
    just flash-p4           # 7" touch app, ESP32-P4 (builds, flashes, opens the monitor)
+   just build-p4-tui-release  # the same P4 firmware with the terminal UI
    ```
 
    Before the first P4 flash, `just backup-p4` saves the board's original firmware.
@@ -139,14 +158,17 @@ esp32-c6-weathertrack/
 ├── config.toml.example         # WiFi + location (copy to config.toml)
 ├── crates/
 │   ├── weathertrack-core/      # Shared library (no ESP32 deps): types, Open-Meteo parsing, WMO codes
+│   ├── weathertrack-view/      # Presentation layer: formatted values, chart geometry, sample data
+│   │   └── slint/              # Slint data types + bridge shared by the two Slint UIs
+│   ├── weathertrack-tui-ui/    # Responsive ratatui UI (compact C6 / wide P4)
 │   ├── weathertrack-hal/       # ESP32-C6 hardware helpers
-│   ├── weathertrack-tui/       # Ratatui frontend (ESP32-C6, 172x320 LCD)
-│   ├── weathertrack-gui/       # Slint frontend (ESP32-C6, 172x320 LCD)
-│   ├── weathertrack-p4/        # Slint touch app (ESP32-P4, 1024x600 MIPI-DSI)
+│   ├── weathertrack-tui/       # C6 firmware: ratatui UI on the 172x320 LCD
+│   ├── weathertrack-gui/       # C6 firmware: Slint UI on the 172x320 LCD
+│   ├── weathertrack-p4/        # P4 firmware: Slint (default) or ratatui UI on 1024x600 MIPI-DSI
 │   │   ├── ui/                 # app.slint, pages/, components/, theme.slint
-│   │   ├── src/                # main, platform (frame buffer + touch), bridge, wifi, net
+│   │   ├── src/                # main, hw (frame buffer, touch), ui_slint, ui_tui, wifi, net
 │   │   └── components/wt_display/  # C shim: EK79007 panel, backlight, GT911
-│   └── weathertrack-p4-preview/    # Host renderer: every P4 tab to PNG
+│   └── weathertrack-*-preview/ # Host renderers: every page of each UI to PNG
 ├── fuzz/                       # cargo-fuzz targets for the core parsers
 ├── .github/, .gitea/           # CI, release, nightly security / fuzz / deps / secrets
 └── scripts/
