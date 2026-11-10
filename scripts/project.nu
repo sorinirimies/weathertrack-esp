@@ -21,7 +21,8 @@ export const PUBLISH = []
 
 # System packages (apt) every Linux job that compiles installs first, e.g. the
 # headers a GUI toolkit links against: ["libxkbcommon-dev"].
-export const APT = []
+# libfontconfig: Slint's font stack (the P4 UI preview crate the gate builds) links it.
+export const APT = ["libfontconfig1-dev"]
 
 # Linux release binaries: "musl" (static, any distro, cargo-zigbuild) or "gnu"
 # (glibc, built natively; for GUI apps, which can not link statically).

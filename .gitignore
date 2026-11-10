@@ -44,7 +44,10 @@ ehthumbs.db
 .env
 .env.*
 secrets.*
-config.toml
+# ...but the gitleaks workflows are named secrets.yml
+!.github/workflows/secrets.yml
+!.gitea/workflows/secrets.yml
+/config.toml
 
 # Local-only: flash dumps of the original board firmware, code index
 backups/
