@@ -72,7 +72,13 @@ export component WeatherApp inherits Window {
     in property <float> week-min;
     in property <float> week-max;
 
+    // Shown when the last refresh failed or the data comes from the flash cache.
+    in property <bool> offline: false;
+    in property <bool> refreshing: false;
+    callback refresh();
+
     in-out property <int> tab: 0;
+    property <length> swipe-from: 0px;
 
     width: 1024px;
     height: 600px;
@@ -156,13 +162,44 @@ export component WeatherApp inherits Window {
             font-family: Theme.font;
             font-size: 14px;
         }
-        Text {
-            x: parent.width - 28px - self.width;
+        // Offline / cached-data banner
+        if root.offline: Rectangle {
+            x: parent.width - 28px - 150px - 14px - 300px;
+            y: 14px;
+            width: 300px;
+            height: 36px;
+            border-radius: 18px;
+            background: Theme.warm.with-alpha(0.22);
+            Text {
+                text: "Offline · " + root.current.updated;
+                color: Theme.warm;
+                font-family: Theme.font;
+                font-size: 16px;
+                font-weight: 700;
+            }
+        }
+
+        // Refresh button
+        Rectangle {
+            x: parent.width - 28px - 150px;
             y: 12px;
-            text: root.tab == 0 ? "Today" : root.tab == 1 ? "Hourly" : root.tab == 2 ? "7-day forecast" : root.tab == 3 ? "Details" : "Alerts";
-            color: Theme.muted;
-            font-family: Theme.font;
-            font-size: 22px;
+            width: 150px;
+            height: 40px;
+            border-radius: 20px;
+            background: refresh-touch.pressed ? Theme.card-hi : Theme.card;
+            border-width: 1px;
+            border-color: Theme.card-border;
+            Text {
+                text: root.refreshing ? "Refreshing…" : "Refresh";
+                color: root.refreshing ? Theme.muted : Theme.accent;
+                font-family: Theme.font;
+                font-size: 18px;
+                font-weight: 700;
+            }
+            refresh-touch := TouchArea {
+                enabled: !root.refreshing;
+                clicked => { root.refresh(); }
+            }
         }
     }
 
@@ -183,6 +220,21 @@ export component WeatherApp inherits Window {
         if root.tab == 2: WeekPage { days: root.days; week-min: root.week-min; week-max: root.week-max; }
         if root.tab == 3: DetailsPage { cur: root.current; arc: root.sun-arc; }
         if root.tab == 4: AlertsPage { alerts: root.alerts; }
+
+        // Swipe left/right to change tab (the pages have no touch targets of their own).
+        TouchArea {
+            pointer-event(e) => {
+                if (e.kind == PointerEventKind.down) {
+                    root.swipe-from = self.mouse-x;
+                } else if (e.kind == PointerEventKind.up) {
+                    if (self.mouse-x - root.swipe-from < -120px && root.tab < 4) {
+                        root.tab += 1;
+                    } else if (self.mouse-x - root.swipe-from > 120px && root.tab > 0) {
+                        root.tab -= 1;
+                    }
+                }
+            }
+        }
     }
 
     // ── Tab bar ──────────────────────────────────────────────────

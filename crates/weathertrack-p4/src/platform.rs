@@ -47,6 +47,11 @@ pub fn init() -> anyhow::Result<Rc<MinimalSoftwareWindow>> {
     Ok(window)
 }
 
+/// Panel backlight, 0..=100.
+pub fn set_backlight(percent: i32) {
+    unsafe { ffi::wt_display_backlight(percent) }
+}
+
 /// Render if anything changed; returns true when a frame was drawn.
 pub fn render(window: &MinimalSoftwareWindow) -> bool {
     window.draw_if_needed(|renderer| {

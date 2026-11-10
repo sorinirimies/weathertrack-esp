@@ -178,6 +178,7 @@ fn main() {
 
     bridge::sync_all(&app, &sample());
     app.set_loading(false);
+    app.set_offline(std::env::var("OFFLINE").is_ok());
     for (i, n) in ["1-today", "2-hourly", "3-week", "4-details", "5-alerts"]
         .iter()
         .enumerate()

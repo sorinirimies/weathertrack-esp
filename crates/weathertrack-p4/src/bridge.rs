@@ -392,6 +392,11 @@ fn alerts(src: &[WeatherAlert]) -> Vec<AlertData> {
         .collect()
 }
 
+/// Whether it is currently day at the location (None before the first forecast).
+pub fn is_day(model: &Model) -> Option<bool> {
+    model.forecast.as_ref()?.current.as_ref().map(|c| c.is_day)
+}
+
 /// Push the whole model into the UI.
 pub fn sync_all(app: &WeatherApp, model: &Model) {
     let m = map(model);

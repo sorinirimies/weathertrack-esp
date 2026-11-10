@@ -1,6 +1,7 @@
 //! NVS (non-volatile storage) configuration persistence.
 
 use esp_idf_svc::nvs::{EspNvs, NvsDefault};
+use weathertrack_core::{deserialize_forecast, serialize_forecast, Forecast};
 
 /// Persisted config loaded from NVS.
 pub struct Config {
@@ -58,4 +59,34 @@ pub fn save_config(nvs: &mut EspNvs<NvsDefault>, cfg: &Config) {
     write(nvs, "lat", &format!("{}", cfg.lat));
     write(nvs, "lon", &format!("{}", cfg.lon));
     write(nvs, "loc_name", &cfg.location);
+}
+
+const FORECAST_KEY: &str = "forecast";
+const FORECAST_FOR_KEY: &str = "fc_for";
+
+/// The key identifying which place a cached forecast belongs to.
+pub fn place_key(lat: f64, lon: f64) -> String {
+    format!("{lat:.3},{lon:.3}")
+}
+
+/// Keep the forecast in flash so the UI has data right after boot, before WiFi is up.
+pub fn save_forecast(nvs: &mut EspNvs<NvsDefault>, place: &str, forecast: &Forecast) {
+    match serialize_forecast(forecast) {
+        Ok(json) => match nvs.set_blob(FORECAST_KEY, json.as_bytes()) {
+            Ok(()) => write(nvs, FORECAST_FOR_KEY, place),
+            Err(e) => log::warn!("forecast cache write failed: {e:?}"),
+        },
+        Err(e) => log::warn!("forecast cache serialise failed: {e:?}"),
+    }
+}
+
+/// The cached forecast, if it is for `place` and still parses.
+pub fn load_forecast(nvs: &EspNvs<NvsDefault>, place: &str) -> Option<Forecast> {
+    if read(nvs, FORECAST_FOR_KEY).as_deref() != Some(place) {
+        return None;
+    }
+    let len = nvs.blob_len(FORECAST_KEY).ok().flatten()?;
+    let mut buf = vec![0u8; len];
+    let bytes = nvs.get_blob(FORECAST_KEY, &mut buf).ok().flatten()?;
+    deserialize_forecast(std::str::from_utf8(bytes).ok()?).ok()
 }
