@@ -67,7 +67,7 @@ It is server-rendered HTML from plain functions in `weathertrack-view` (no JavaS
 
 ### Choosing the place
 
-By default every board looks up where it is from the network on boot (IP geolocation: city level, and an ISP's registered city can be tens of kilometres off). To pick the place yourself, no keyboard needed:
+By default every board looks up where it is from the network on boot (IP geolocation: city level, and an ISP's registered city can be tens of kilometres off). To pick the place yourself. On the P4 you can type the city right on the screen (Place tab: keyboard, results, **Use network**); on any board, from a phone or computer:
 
 1. Open the **Place** page on the device (or the **Place** link on the website). It shows the place in use, where it came from, and an address like `http://192.168.3.210/`.
 2. Open that address on a phone or computer on the same WiFi, type a city and tap the right result (Open-Meteo geocoding, no key).
@@ -77,7 +77,7 @@ Order of precedence: a place pinned in `config.toml` (`[location] fixed = true`)
 
 | P4 · Place (Slint) | C6 · Place (Slint) | C6 · Place (terminal) |
 |---|---|---|
-| ![P4 place](docs/screenshots/p4-slint-place.png) | ![C6 place](docs/screenshots/c6-slint-place.png) | ![C6 TUI place](docs/screenshots/c6-tui-place.png) |
+| ![P4 place](docs/screenshots/p4-slint-place-search.png) | ![C6 place](docs/screenshots/c6-slint-place.png) | ![C6 TUI place](docs/screenshots/c6-tui-place.png) |
 
 ### The web app (Topcoat)
 

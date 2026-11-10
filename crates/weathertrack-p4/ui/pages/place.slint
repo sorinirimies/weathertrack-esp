@@ -1,65 +1,198 @@
 import { Theme } from "../theme.slint";
-import { PlaceData } from "../types.slint";
-import { Card, Caption } from "../components/card.slint";
+import { PlaceData, PlaceResult } from "../types.slint";
+import { Caption } from "../components/card.slint";
 
-// Content area: 1024 x 464. The place in use and how to change it from a phone or computer.
+// One key. `wide` keys span several columns.
+component Key inherits Rectangle {
+    in property <string> label;
+    in property <bool> accent: false;
+    callback tapped();
+
+    border-radius: 12px;
+    background: touch.pressed ? Theme.accent : accent ? Theme.card-hi : Theme.card;
+    border-width: 1px;
+    border-color: accent ? Theme.accent.with-alpha(0.6) : Theme.card-border;
+    Text {
+        text: root.label;
+        font-family: Theme.font;
+        font-size: 26px;
+        font-weight: 700;
+        color: touch.pressed ? Theme.bg-top : accent ? Theme.accent : Theme.text;
+    }
+    touch := TouchArea { clicked => { root.tapped(); } }
+}
+
+// Content area: 1024 x 464. Search a city with the on-screen keyboard, or use the network location.
+// The place in use is shown until there are results.
 export component PlacePage inherits Rectangle {
     in property <PlaceData> place;
+    in property <[PlaceResult]> results;
+    in property <string> status;
+    callback search(string);
+    callback choose(int);
+    callback use-network();
 
-    Card {
+    in property <string> query;
+    callback key(string);
+    callback backspace();
+    callback clear();
+    property <length> kw: 84px;   // key width
+    property <length> kh: 54px;   // key height
+    property <length> kg: 6px;    // gap
+    property <[string]> row1: ["q", "w", "e", "r", "t", "z", "u", "i", "o", "p", "ü"];
+    property <[string]> row2: ["a", "s", "d", "f", "g", "h", "j", "k", "l", "ö", "ä"];
+    property <[string]> row3: ["y", "x", "c", "v", "b", "n", "m", "ß", "-", "'"];
+
+    // ── Search field and the network button ──
+    Rectangle {
         x: 20px;
-        y: 8px;
-        width: 984px;
-        height: 436px;
-
-        Caption { x: 28px; y: 20px; text: "YOUR PLACE"; }
+        y: 6px;
+        width: 760px;
+        height: 56px;
+        border-radius: 14px;
+        background: Theme.bg-top;
+        border-width: 2px;
+        border-color: Theme.accent;
         Text {
-            x: 28px;
-            y: 44px;
-            width: parent.width - 56px;
+            x: 18px;
+            width: parent.width - 36px;
+            horizontal-alignment: left;
+            text: root.query == "" ? "Type a city…" : root.query + "|";
+            font-family: Theme.font;
+            font-size: 30px;
+            font-weight: root.query == "" ? 400 : 700;
+            color: root.query == "" ? Theme.faint : Theme.text;
+            overflow: elide;
+        }
+    }
+    Key {
+        x: 790px;
+        y: 6px;
+        width: 214px;
+        height: 56px;
+        label: "Use network";
+        tapped => { root.use-network(); }
+    }
+
+    // ── Results (or the place in use) ──
+    if root.results.length == 0: Rectangle {
+        x: 20px;
+        y: 72px;
+        width: 984px;
+        height: 138px;
+        Caption { y: 4px; width: parent.width; horizontal-alignment: left; text: root.status == "" ? "SHOWING THE WEATHER FOR" : root.status; }
+        Text {
+            y: 28px;
+            width: parent.width;
             text: place.name;
             font-family: Theme.font;
-            font-size: 64px;
+            font-size: 52px;
             font-weight: 700;
             color: Theme.text;
             overflow: elide;
         }
         Text {
-            x: 28px;
-            y: 128px;
-            text: place.coordinates + "  ·  " + place.source;
-            font-family: Theme.font;
-            font-size: 22px;
-            color: Theme.muted;
-        }
-        Rectangle { x: 28px; y: 180px; width: parent.width - 56px; height: 1px; background: Theme.card-border; }
-        Text {
-            x: 28px;
-            y: 200px;
-            text: "Change it from a phone or computer on the same WiFi network:";
-            font-family: Theme.font;
-            font-size: 22px;
-            color: Theme.text;
-        }
-        Text {
-            x: 28px;
-            y: 238px;
-            width: parent.width - 56px;
-            text: place.url == "" ? "waiting for WiFi..." : place.url;
-            font-family: Theme.font;
-            font-size: 48px;
-            font-weight: 700;
-            color: place.url == "" ? Theme.faint : Theme.accent;
-            overflow: elide;
-        }
-        Text {
-            x: 28px;
-            y: 322px;
-            width: parent.width - 56px;
-            text: "1. Open the address in a browser.\n2. Type a city, tap Search, then tap the right result.\n3. \"Use my network location\" goes back to automatic.";
+            y: 94px;
+            width: parent.width;
+            text: place.source + "  ·  " + place.coordinates + (place.url == "" ? "" : "  ·  " + place.url);
             font-family: Theme.font;
             font-size: 20px;
             color: Theme.muted;
+            overflow: elide;
         }
+    }
+    for r[i] in root.results: Rectangle {
+        x: 20px + mod(i, 2) * 496px;
+        y: 72px + floor(i / 2) * 70px;
+        width: 488px;
+        height: 62px;
+        visible: i < 4;
+        border-radius: 14px;
+        background: rt.pressed ? Theme.accent : Theme.card-hi;
+        border-width: 1px;
+        border-color: Theme.accent.with-alpha(0.6);
+        Text {
+            x: 16px;
+            y: 6px;
+            width: parent.width - 32px;
+            text: r.name;
+            font-family: Theme.font;
+            font-size: 26px;
+            font-weight: 700;
+            color: rt.pressed ? Theme.bg-top : Theme.text;
+            overflow: elide;
+        }
+        Text {
+            x: 16px;
+            y: 36px;
+            width: parent.width - 32px;
+            text: r.detail;
+            font-family: Theme.font;
+            font-size: 17px;
+            color: rt.pressed ? Theme.bg-top : Theme.muted;
+            overflow: elide;
+        }
+        rt := TouchArea { clicked => { root.choose(i); } }
+    }
+
+    // ── Keyboard (QWERTZ, 11 columns) ──
+    for k[i] in root.row1: Key {
+        x: 20px + i * (kw + kg);
+        y: 222px;
+        width: kw;
+        height: kh;
+        label: k;
+        tapped => { root.key(k); }
+    }
+    for k[i] in root.row2: Key {
+        x: 20px + i * (kw + kg);
+        y: 222px + (kh + kg);
+        width: kw;
+        height: kh;
+        label: k;
+        tapped => { root.key(k); }
+    }
+    for k[i] in root.row3: Key {
+        x: 20px + i * (kw + kg);
+        y: 222px + 2 * (kh + kg);
+        width: kw;
+        height: kh;
+        label: k;
+        tapped => { root.key(k); }
+    }
+    Key {
+        x: 20px + 10 * (kw + kg);
+        y: 222px + 2 * (kh + kg);
+        width: kw;
+        height: kh;
+        label: "Del";
+        accent: true;
+        tapped => { root.backspace(); }
+    }
+    Key {
+        x: 20px;
+        y: 222px + 3 * (kh + kg);
+        width: 2 * kw + kg;
+        height: kh;
+        label: "Clear";
+        accent: true;
+        tapped => { root.clear(); }
+    }
+    Key {
+        x: 20px + 2 * (kw + kg);
+        y: 222px + 3 * (kh + kg);
+        width: 7 * kw + 6 * kg;
+        height: kh;
+        label: "space";
+        tapped => { root.key(" "); }
+    }
+    Key {
+        x: 20px + 9 * (kw + kg);
+        y: 222px + 3 * (kh + kg);
+        width: 2 * kw + kg;
+        height: kh;
+        label: "Search";
+        accent: true;
+        tapped => { root.search(root.query); }
     }
 }

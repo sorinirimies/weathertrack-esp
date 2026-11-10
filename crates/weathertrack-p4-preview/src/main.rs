@@ -78,4 +78,15 @@ fn main() {
         app.set_tab(i as i32);
         shot(n);
     }
+
+    // The Place tab while searching: a typed city and its results.
+    app.set_tab(4);
+    app.set_query("stuttgart".into());
+    app.set_results(slint::ModelRc::new(slint::VecModel::from(vec![
+        PlaceResult { name: "Stuttgart".into(), detail: "Baden-Württemberg, Germany".into() },
+        PlaceResult { name: "Stuttgart".into(), detail: "Arkansas, United States".into() },
+        PlaceResult { name: "Stuttgart-Ost".into(), detail: "Baden-Württemberg, Germany".into() },
+        PlaceResult { name: "Stuttgart Airport".into(), detail: "Baden-Württemberg, Germany".into() },
+    ])));
+    shot("5-place-search");
 }

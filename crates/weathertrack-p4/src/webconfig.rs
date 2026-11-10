@@ -18,13 +18,18 @@ use crate::net;
 /// A request body longer than this is cut off (the forms send a few dozen bytes).
 const MAX_BODY: usize = 1024;
 
+/// City search over HTTPS (Open-Meteo geocoding); also used by the on-screen keyboard.
+pub fn search(query: &str) -> Result<Vec<Location>, String> {
+    let body = net::http_get(&build_geocode_url(query, 6)).map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
+    parse_geocode(&json).map_err(|e| e.to_string())
+}
+
 struct NetGeocoder;
 
 impl Geocoder for NetGeocoder {
     fn search(&self, query: &str) -> Result<Vec<Location>, String> {
-        let body = net::http_get(&build_geocode_url(query, 6)).map_err(|e| e.to_string())?;
-        let json: serde_json::Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
-        parse_geocode(&json).map_err(|e| e.to_string())
+        search(query)
     }
 }
 

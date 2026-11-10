@@ -2,6 +2,8 @@
 //! (cargo features `slint-ui` and `tui`).
 
 use weathertrack_core::app::Model;
+use weathertrack_core::place::PlaceChoice;
+use weathertrack_core::Location;
 
 pub trait Ui {
     /// Show the boot / progress screen.
@@ -16,6 +18,16 @@ pub trait Ui {
     fn set_theme(&mut self, _index: usize) {}
     /// The theme the user just picked on screen, if they did (to persist it).
     fn take_theme_change(&mut self) -> Option<usize> {
+        None
+    }
+    /// A city the user typed on the on-screen keyboard and searched for, if they did.
+    fn take_search(&mut self) -> Option<String> {
+        None
+    }
+    /// Show the cities found (`status` explains an empty list: searching, none found, failed).
+    fn set_search_results(&mut self, _found: &[Location], _status: &str) {}
+    /// The place the user tapped on the screen (a search result or "Use network"), if they did.
+    fn take_place_choice(&mut self) -> Option<PlaceChoice> {
         None
     }
 }

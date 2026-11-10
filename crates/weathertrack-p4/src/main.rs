@@ -250,8 +250,25 @@ fn run() -> anyhow::Result<()> {
     loop {
         let frame_start = Instant::now();
         let mut manual = ui.frame();
-        // A place chosen on the web page: use it and fetch its weather right away
-        if let Some(new_choice) = server.as_ref().and_then(PlaceServer::take_choice) {
+        // A city typed on the on-screen keyboard: search it (the screen says so meanwhile)
+        if let Some(query) = ui.take_search() {
+            ui.set_search_results(&[], "SEARCHING...");
+            match webconfig::search(&query) {
+                Ok(found) if found.is_empty() => ui.set_search_results(&[], "NO CITY FOUND"),
+                Ok(found) => ui.set_search_results(&found, ""),
+                Err(e) => {
+                    log::warn!("city search failed: {e}");
+                    ui.set_search_results(&[], "SEARCH FAILED, CHECK WIFI");
+                }
+            }
+        }
+        // A place chosen on the web page or on the screen: use it and fetch its weather right away
+        if let Some(new_choice) = server
+            .as_ref()
+            .and_then(PlaceServer::take_choice)
+            .or_else(|| ui.take_place_choice())
+        {
+            ui.set_search_results(&[], "");
             place::save_choice(&mut nvs_store, &new_choice);
             choice = new_choice;
             let (now_at, src) = place::resolve(

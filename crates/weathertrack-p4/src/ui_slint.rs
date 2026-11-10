@@ -4,18 +4,23 @@
 //! scans out; after each frame only the changed rows are written back from the CPU cache.
 //! GT911 touch is turned into Slint pointer events.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType, Rgb565Pixel};
 use slint::platform::{PointerEventButton, WindowEvent};
-use slint::{ComponentHandle, LogicalPosition};
+use slint::{ComponentHandle, LogicalPosition, ModelRc, SharedString, VecModel};
 use weathertrack_core::app::Model;
+use weathertrack_core::place::{Place, PlaceChoice};
+use weathertrack_core::Location;
 
 use crate::hw::{self, Touch, TouchTracker, HEIGHT, WIDTH};
 use crate::ui::Ui;
 use crate::{bridge, WeatherApp};
+
+/// Longest city name the on-screen keyboard accepts.
+const MAX_QUERY: usize = 40;
 
 struct EspPlatform {
     window: Rc<MinimalSoftwareWindow>,
@@ -39,6 +44,9 @@ pub struct SlintUi {
     window: Rc<MinimalSoftwareWindow>,
     touch: TouchTracker,
     refresh: Rc<Cell<bool>>,
+    search: Rc<RefCell<Option<String>>>,
+    found: Rc<RefCell<Vec<Location>>>,
+    pick: Rc<RefCell<Option<PlaceChoice>>>,
 }
 
 impl SlintUi {
@@ -59,11 +67,74 @@ impl SlintUi {
             let flag = refresh.clone();
             move || flag.set(true)
         });
+        let search = Rc::new(RefCell::new(None));
+        let found: Rc<RefCell<Vec<Location>>> = Rc::new(RefCell::new(Vec::new()));
+        let pick = Rc::new(RefCell::new(None));
+        let query = Rc::new(RefCell::new(String::new()));
+        app.on_key({
+            let (query, weak) = (query.clone(), app.as_weak());
+            move |k| {
+                let mut q = query.borrow_mut();
+                if q.chars().count() < MAX_QUERY {
+                    q.push_str(&k);
+                }
+                if let Some(app) = weak.upgrade() {
+                    app.set_query(q.as_str().into());
+                }
+            }
+        });
+        app.on_backspace({
+            let (query, weak) = (query.clone(), app.as_weak());
+            move || {
+                let mut q = query.borrow_mut();
+                q.pop();
+                if let Some(app) = weak.upgrade() {
+                    app.set_query(q.as_str().into());
+                }
+            }
+        });
+        app.on_clear({
+            let (query, weak) = (query.clone(), app.as_weak());
+            move || {
+                query.borrow_mut().clear();
+                if let Some(app) = weak.upgrade() {
+                    app.set_query(SharedString::new());
+                }
+            }
+        });
+        app.on_search({
+            let search = search.clone();
+            move |q| {
+                let q = q.trim().to_string();
+                if !q.is_empty() {
+                    *search.borrow_mut() = Some(q);
+                }
+            }
+        });
+        app.on_choose({
+            let (found, pick) = (found.clone(), pick.clone());
+            move |i| {
+                let place = usize::try_from(i)
+                    .ok()
+                    .and_then(|i| found.borrow().get(i).cloned())
+                    .and_then(|l| Place::new(l.latitude, l.longitude, &l.name));
+                if let Some(p) = place {
+                    *pick.borrow_mut() = Some(PlaceChoice::Manual(p));
+                }
+            }
+        });
+        app.on_use_network({
+            let pick = pick.clone();
+            move || *pick.borrow_mut() = Some(PlaceChoice::Auto)
+        });
         Ok(Self {
             app,
             window,
             touch: TouchTracker::default(),
             refresh,
+            search,
+            found,
+            pick,
         })
     }
 
@@ -144,5 +215,35 @@ impl Ui for SlintUi {
         slint::platform::update_timers_and_animations();
         self.render();
         self.refresh.replace(false)
+    }
+
+    fn take_search(&mut self) -> Option<String> {
+        self.search.borrow_mut().take()
+    }
+
+    fn set_search_results(&mut self, found: &[Location], status: &str) {
+        let rows: Vec<crate::PlaceResult> = found
+            .iter()
+            .map(|l| {
+                let detail = [l.region.as_deref().or(l.state.as_deref()), Some(l.country.as_str())]
+                    .into_iter()
+                    .flatten()
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                crate::PlaceResult {
+                    name: SharedString::from(l.name.as_str()),
+                    detail: SharedString::from(detail),
+                }
+            })
+            .collect();
+        *self.found.borrow_mut() = found.to_vec();
+        self.app.set_results(ModelRc::new(VecModel::from(rows)));
+        self.app.set_search_status(status.into());
+        self.draw();
+    }
+
+    fn take_place_choice(&mut self) -> Option<PlaceChoice> {
+        self.pick.borrow_mut().take()
     }
 }

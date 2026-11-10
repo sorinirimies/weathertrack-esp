@@ -5,7 +5,7 @@ import "fonts/NotoSans-Regular.ttf";
 import "fonts/NotoSans-Bold.ttf";
 
 import { Theme } from "theme.slint";
-import { CurrentData, HourData, DayData, AlertData, PlaceData } from "types.slint";
+import { CurrentData, HourData, DayData, AlertData, PlaceData, PlaceResult } from "types.slint";
 import { TodayPage } from "pages/today.slint";
 import { HourlyPage } from "pages/hourly.slint";
 import { WeekPage } from "pages/week.slint";
@@ -13,7 +13,7 @@ import { DetailsPage } from "pages/details.slint";
 import { PlacePage } from "pages/place.slint";
 import { AlertsPage } from "pages/alerts.slint";
 
-export { CurrentData, HourData, DayData, AlertData, PlaceData }
+export { CurrentData, HourData, DayData, AlertData, PlaceData, PlaceResult }
 
 component TabButton inherits Rectangle {
     in property <string> label;
@@ -78,6 +78,17 @@ export component WeatherApp inherits Window {
     in property <bool> offline: false;
     in property <bool> refreshing: false;
     callback refresh();
+
+    // On-screen city search (Place tab): the keyboard edits `query` in the page itself.
+    in property <[PlaceResult]> results;
+    in property <string> search-status;
+    in property <string> query;
+    callback key(string);
+    callback backspace();
+    callback clear();
+    callback search(string);
+    callback choose(int);
+    callback use-network();
 
     in-out property <int> tab: 0;
     property <length> swipe-from: 0px;
@@ -221,11 +232,24 @@ export component WeatherApp inherits Window {
         }
         if root.tab == 2: WeekPage { days: root.days; week-min: root.week-min; week-max: root.week-max; }
         if root.tab == 3: DetailsPage { cur: root.current; arc: root.sun-arc; }
-        if root.tab == 4: PlacePage { place: root.place; }
+        if root.tab == 4: PlacePage {
+            place: root.place;
+            results: root.results;
+            status: root.search-status;
+            query: root.query;
+            key(k) => { root.key(k); }
+            backspace => { root.backspace(); }
+            clear => { root.clear(); }
+            search(q) => { root.search(q); }
+            choose(i) => { root.choose(i); }
+            use-network => { root.use-network(); }
+        }
         if root.tab == 5: AlertsPage { alerts: root.alerts; }
 
         // Swipe left/right to change tab (the pages have no touch targets of their own).
         TouchArea {
+            // the Place page has its own touch targets (the keyboard)
+            enabled: root.tab != 4;
             pointer-event(e) => {
                 if (e.kind == PointerEventKind.down) {
                     root.swipe-from = self.mouse-x;
