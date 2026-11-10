@@ -1,14 +1,28 @@
 //! WeatherTrack for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B.
-//! Hardware init → Slint platform → cached forecast → WiFi (via the C6 coprocessor) → Elm loop.
+//! Hardware init → UI → cached forecast → WiFi (via the C6 coprocessor) → refresh loop.
+//!
+//! Two UIs, chosen at build time: `slint-ui` (default, the graphical one) or `tui` (ratatui).
 
+#[cfg(not(any(feature = "slint-ui", feature = "tui")))]
+compile_error!("enable exactly one UI feature: `slint-ui` (default) or `tui`");
+#[cfg(all(feature = "slint-ui", feature = "tui"))]
+compile_error!("the `slint-ui` and `tui` features exclude each other; build with --no-default-features --features tui");
+
+#[cfg(feature = "slint-ui")]
+#[path = "../../weathertrack-view/slint/bridge.rs"]
 mod bridge;
+#[cfg(feature = "slint-ui")]
+mod bridge_config;
+mod hw;
 mod net;
-mod platform;
 mod store;
+mod ui;
+#[cfg(feature = "slint-ui")]
+mod ui_slint;
+#[cfg(feature = "tui")]
+mod ui_tui;
 mod wifi;
 
-use std::cell::Cell;
-use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use esp_idf_hal::{delay::FreeRtos, peripherals::Peripherals};
@@ -16,10 +30,13 @@ use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     nvs::{EspDefaultNvsPartition, EspNvs},
 };
-use slint::platform::software_renderer::MinimalSoftwareWindow;
 use weathertrack_core::app::{self, Model, Msg};
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
+use weathertrack_view::ViewModel;
 
+use crate::ui::Ui;
+
+#[cfg(feature = "slint-ui")]
 slint::include_modules!();
 
 // Baked in from config.toml by build.rs; when set they win over what is stored in NVS.
@@ -49,24 +66,26 @@ fn defaults() -> store::ConfigDefaults {
     }
 }
 
-/// Update the loading screen and draw it right away.
-fn status(app: &WeatherApp, window: &MinimalSoftwareWindow, msg: &str, progress: f32) {
-    log::info!("{msg}");
-    app.set_loading_status(msg.into());
-    app.set_loading_progress(progress);
-    draw(window);
+#[cfg(feature = "slint-ui")]
+fn new_ui() -> anyhow::Result<impl Ui> {
+    ui_slint::SlintUi::new()
 }
 
-fn draw(window: &MinimalSoftwareWindow) {
-    window.request_redraw();
-    slint::platform::update_timers_and_animations();
-    platform::render(window);
+#[cfg(feature = "tui")]
+fn new_ui() -> anyhow::Result<impl Ui> {
+    ui_tui::TuiUi::new()
+}
+
+/// Boot progress: log it and show it.
+fn status(ui: &mut impl Ui, msg: &str, progress: f32) {
+    log::info!("{msg}");
+    ui.loading(msg, progress);
 }
 
 /// Dim the panel at night.
 fn apply_backlight(model: &Model) {
-    if let Some(day) = bridge::is_day(model) {
-        platform::set_backlight(if day { BACKLIGHT_DAY } else { BACKLIGHT_NIGHT });
+    if let Some(day) = ViewModel::from_model(model, 1).is_day() {
+        hw::set_backlight(if day { BACKLIGHT_DAY } else { BACKLIGHT_NIGHT });
     }
 }
 
@@ -89,21 +108,13 @@ fn run() -> anyhow::Result<()> {
     let sys_loop = EspSystemEventLoop::take()?;
     let nvs_part = EspDefaultNvsPartition::take()?;
 
-    // ── Display + touch + Slint ─────────────────────────────────────
-    let window = platform::init()?;
-    let app = WeatherApp::new().map_err(|e| anyhow::anyhow!("ui: {e}"))?;
-    app.show().map_err(|e| anyhow::anyhow!("show: {e}"))?;
-    app.set_loading(true);
-    status(&app, &window, "Starting…", 0.05);
-
-    let refresh_requested = Rc::new(Cell::new(false));
-    app.on_refresh({
-        let flag = refresh_requested.clone();
-        move || flag.set(true)
-    });
+    // ── Display + touch + UI ────────────────────────────────────────
+    hw::init()?;
+    let mut ui = new_ui()?;
+    status(&mut ui, "Starting…", 0.05);
 
     // ── Config: config.toml (baked in) wins over NVS ────────────────
-    status(&app, &window, "Reading config…", 0.15);
+    status(&mut ui, "Reading config…", 0.15);
     let defaults = defaults();
     let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true)?;
     let mut cfg = store::load_config(&nvs_store, &defaults);
@@ -124,33 +135,34 @@ fn run() -> anyhow::Result<()> {
     if let Some(forecast) = store::load_forecast(&nvs_store, &store::place_key(cfg.lat, cfg.lon)) {
         log::info!("showing the forecast cached in flash");
         app::update(&mut model, Msg::WeatherLoaded(Box::new(forecast)));
-        bridge::sync_all(&app, &model);
         apply_backlight(&model);
-        app.set_offline(true);
-        app.set_loading(false);
+        ui.show(&model, true);
         offline = true;
-        draw(&window);
     }
 
     // ── WiFi (retry until it works) ─────────────────────────────────
-    status(&app, &window, "Starting WiFi radio…", 0.25);
+    if !offline {
+        status(&mut ui, "Starting WiFi radio…", 0.25);
+    }
     let mut wifi = wifi::start(p.modem, sys_loop, nvs_part)?;
     let mut attempt = 0u32;
     loop {
         attempt += 1;
-        status(
-            &app,
-            &window,
-            &format!("Connecting to {} (try {attempt})…", cfg.ssid),
-            0.35,
-        );
+        if !offline {
+            status(
+                &mut ui,
+                &format!("Connecting to {} (try {attempt})…", cfg.ssid),
+                0.35,
+            );
+        }
         match wifi::join(&mut wifi, &cfg.ssid, &cfg.pass) {
             Ok(()) => break,
             Err(e) => {
-                status(&app, &window, &format!("WiFi failed: {e}"), 0.35);
+                log::warn!("WiFi failed: {e}");
                 if offline {
                     break; // the cached forecast is on screen; keep retrying from the loop below
                 }
+                status(&mut ui, &format!("WiFi failed: {e}"), 0.35);
                 FreeRtos::delay_ms(5000);
             }
         }
@@ -160,7 +172,7 @@ fn run() -> anyhow::Result<()> {
     let is_default = (cfg.lat - defaults.lat).abs() < 0.01 && (cfg.lon - defaults.lon).abs() < 0.01;
     if !configured_location && (!cfg.from_nvs || is_default) && wifi.is_connected().unwrap_or(false)
     {
-        status(&app, &window, "Detecting location…", 0.55);
+        status(&mut ui, "Detecting location…", 0.55);
         if let Ok(loc) = net::fetch_ip_location() {
             cfg.lat = loc.latitude;
             cfg.lon = loc.longitude;
@@ -172,7 +184,9 @@ fn run() -> anyhow::Result<()> {
 
     // ── First fetch ─────────────────────────────────────────────────
     loop {
-        status(&app, &window, "Fetching weather…", 0.75);
+        if !offline {
+            status(&mut ui, "Fetching weather…", 0.75);
+        }
         match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
             Ok(f) => {
                 store::save_forecast(&mut nvs_store, &store::place_key(cfg.lat, cfg.lon), &f);
@@ -182,36 +196,29 @@ fn run() -> anyhow::Result<()> {
                 break;
             }
             Err(e) => {
-                status(&app, &window, &format!("Weather error: {e}"), 0.75);
+                log::warn!("weather error: {e}");
                 if offline {
                     break; // cached data stays on screen, the loop retries
                 }
+                status(&mut ui, &format!("Weather error: {e}"), 0.75);
                 FreeRtos::delay_ms(5000);
             }
         }
     }
-    status(&app, &window, "Done", 1.0);
-    bridge::sync_all(&app, &model);
     apply_backlight(&model);
-    app.set_offline(offline);
-    app.set_loading(false);
+    ui.show(&model, offline);
 
-    // ── Event loop ──────────────────────────────────────────────────
-    let mut touch = platform::Touch::default();
+    // ── Refresh loop ────────────────────────────────────────────────
     let refresh = Duration::from_millis(REFRESH_MS as u64);
     let mut last_fetch = Instant::now();
 
     loop {
         let frame_start = Instant::now();
-        touch.poll(&window);
-        slint::platform::update_timers_and_animations();
-        platform::render(&window);
+        let manual = ui.frame();
 
-        let manual = refresh_requested.replace(false);
         let interval = if offline { RETRY } else { refresh };
         if manual || last_fetch.elapsed() >= interval {
-            app.set_refreshing(true);
-            draw(&window);
+            ui.set_refreshing(true);
             if !wifi.is_connected().unwrap_or(false) {
                 let _ = wifi::join(&mut wifi, &cfg.ssid, &cfg.pass);
             }
@@ -226,18 +233,18 @@ fn run() -> anyhow::Result<()> {
                         cached_at = Some(Instant::now());
                     }
                     app::update(&mut model, Msg::WeatherLoaded(Box::new(f)));
-                    bridge::sync_all(&app, &model);
                     apply_backlight(&model);
                     offline = false;
+                    ui.show(&model, offline);
                 }
                 Err(e) => {
                     log::warn!("refresh failed: {e}");
                     app::update(&mut model, Msg::WeatherError(e.to_string()));
                     offline = true;
+                    ui.set_offline(offline);
                 }
             }
-            app.set_offline(offline);
-            app.set_refreshing(false);
+            ui.set_refreshing(false);
             last_fetch = Instant::now();
         }
 

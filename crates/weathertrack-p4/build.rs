@@ -38,10 +38,14 @@ fn main() {
     }
 
     // ── Slint compilation ───────────────────────────────────────
-    let slint_config = slint_build::CompilerConfiguration::new()
-        .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer);
-    slint_build::compile_with_config("ui/app.slint", slint_config).unwrap();
-    println!("cargo:rerun-if-changed=ui");
+    // The Slint UI is compiled only when that feature is on (the `tui` build needs no .slint).
+    if std::env::var_os("CARGO_FEATURE_SLINT_UI").is_some() {
+        let slint_config = slint_build::CompilerConfiguration::new()
+            .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer);
+        slint_build::compile_with_config("ui/app.slint", slint_config).unwrap();
+        println!("cargo:rerun-if-changed=ui");
+        println!("cargo:rerun-if-changed=../weathertrack-view/slint");
+    }
 
     embuild::espidf::sysenv::output();
 }

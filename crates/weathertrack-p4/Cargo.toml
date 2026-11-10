@@ -21,19 +21,30 @@ opt-level = "s"
 
 [dependencies]
 weathertrack-core = { path = "../weathertrack-core", default-features = false }
+weathertrack-view = { path = "../weathertrack-view" }
 log = "0.4"
 esp-idf-svc = { version = "0.53", features = ["experimental"] }
 esp-idf-hal = "0.47"
 serde_json = "1"
 anyhow = "1"
 
-# Slint, software renderer drawing straight into the DSI frame buffer (RGB565).
-slint = { version = "1.11", default-features = false, features = [
+# UI 1 (feature `slint-ui`): Slint, software renderer drawing straight into the DSI frame buffer.
+slint = { version = "1.11", default-features = false, optional = true, features = [
     "compat-1-2",
     "renderer-software",
     "unsafe-single-threaded",
     "libm",
 ] }
+# UI 2 (feature `tui`): ratatui widgets drawn by mousefood into the same frame buffer.
+ratatui = { version = "0.30", default-features = false, optional = true }
+mousefood = { version = "0.5", default-features = false, optional = true, features = ["fonts"] }
+weathertrack-tui-ui = { path = "../weathertrack-tui-ui", optional = true }
+
+[features]
+default = ["slint-ui"]
+# Exactly one of the two (see main.rs): `cargo build --no-default-features --features tui`.
+slint-ui = ["dep:slint"]
+tui = ["dep:ratatui", "dep:mousefood", "dep:weathertrack-tui-ui"]
 
 [build-dependencies]
 embuild = "0.33"

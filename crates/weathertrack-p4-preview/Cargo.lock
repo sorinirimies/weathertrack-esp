@@ -4236,6 +4236,14 @@ dependencies = [
  "slint",
  "slint-build",
  "weathertrack-core",
+ "weathertrack-view",
+]
+
+[[package]]
+name = "weathertrack-view"
+version = "0.1.0"
+dependencies = [
+ "weathertrack-core",
 ]
 
 [[package]]
