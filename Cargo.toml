@@ -11,6 +11,7 @@ exclude = [
     "crates/weathertrack-p4-preview",
     "crates/weathertrack-tui-preview",
     "crates/weathertrack-gui-preview",
+    "crates/weathertrack-web",
 ]
 
 # One version for every crate; `just bump X.Y.Z` edits it (and EXTRA_MANIFESTS).

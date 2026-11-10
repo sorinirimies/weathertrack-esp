@@ -1,0 +1,43 @@
+[package]
+name = "weathertrack-web"
+version = "0.1.0"
+edition = "2024"
+authors = ["Sorin Albu-Irimies"]
+license = "MIT"
+repository = "https://github.com/sorinirimies/esp32-c6-weathertrack"
+description = "WeatherTrack web app (Topcoat): weather for any place, and one place for all your ESP32 devices, kept in sync"
+publish = false
+# Topcoat 0.10 needs 1.98; the rest of the project builds with 1.90.
+rust-version = "1.98"
+
+[lib]
+name = "weathertrack_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "weathertrack-web"
+path = "src/main.rs"
+
+[dependencies]
+weathertrack-core = { path = "../weathertrack-core" }
+weathertrack-view = { path = "../weathertrack-view" }
+topcoat = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4.6", features = ["derive", "env"] }
+ureq = "3"
+dirs = "6"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+
+# Not part of the root workspace: it needs a newer Rust than the firmware crates and a bigger
+# dependency tree (tokio, a TLS stack). It has its own lockfile and is checked by the quality gate.
+[workspace]
