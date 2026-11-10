@@ -1,0 +1,200 @@
+import { Theme } from "../theme.slint";
+import { CurrentData, HourData } from "../types.slint";
+import { Card, Caption } from "../components/card.slint";
+import { MetricTile } from "../components/metric-tile.slint";
+
+export component TodayPage inherits Rectangle {
+    in property <CurrentData> cur;
+    in property <[HourData]> hours;
+
+    // ── Hero ─────────────────────────────────────────────────────
+    Card {
+        x: 20px;
+        y: 8px;
+        width: 436px;
+        height: 292px;
+        highlight: true;
+
+        Text {
+            x: 24px;
+            y: 18px;
+            text: root.cur.is-day ? "DAYTIME" : "NIGHT";
+            color: Theme.muted;
+            font-family: Theme.font;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        Text {
+            x: 24px;
+            y: 46px;
+            text: cur.icon;
+            font-family: Theme.icon-font;
+            font-size: 120px;
+            color: Theme.warm;
+        }
+
+        Text {
+            x: 170px;
+            y: 30px;
+            text: cur.temperature + "°";
+            font-family: Theme.font;
+            font-size: 104px;
+            font-weight: 700;
+            color: Theme.temp-color(cur.temp-val);
+        }
+
+        Text {
+            x: 24px;
+            y: 196px;
+            width: parent.width - 48px;
+            text: cur.condition;
+            font-family: Theme.font;
+            font-size: 34px;
+            font-weight: 700;
+            color: Theme.text;
+            overflow: elide;
+        }
+
+        Text {
+            x: 24px;
+            y: 244px;
+            text: "Feels like " + cur.feels-like + "°   ↑ " + cur.high + "°   ↓ " + cur.low + "°";
+            font-family: Theme.font;
+            font-size: 19px;
+            color: Theme.muted;
+        }
+    }
+
+    // ── Metric grid (3 x 2) ──────────────────────────────────────
+    MetricTile {
+        x: 472px;
+        y: 8px;
+        width: 170px;
+        height: 139px;
+        title: "HUMIDITY";
+        value: Math.round(cur.humidity);
+        unit: "%";
+        sub: cur.humidity < 30 ? "Dry" : cur.humidity < 60 ? "Comfortable" : cur.humidity < 80 ? "Humid" : "Very humid";
+        fraction: cur.humidity / 100;
+        accent: #38bdf8;
+    }
+    MetricTile {
+        x: 656px;
+        y: 8px;
+        width: 170px;
+        height: 139px;
+        title: "WIND";
+        value: cur.wind-speed;
+        unit: "km/h";
+        sub: cur.wind-dir + "  ·  gusts " + cur.gusts;
+        accent: #a78bfa;
+    }
+    MetricTile {
+        x: 840px;
+        y: 8px;
+        width: 164px;
+        height: 139px;
+        title: "PRESSURE";
+        value: cur.pressure;
+        unit: "hPa";
+        sub: cur.pressure-label;
+        accent: #f472b6;
+    }
+    MetricTile {
+        x: 472px;
+        y: 161px;
+        width: 170px;
+        height: 139px;
+        title: "UV INDEX";
+        value: Math.round(cur.uv);
+        unit: "";
+        sub: cur.uv-label;
+        fraction: cur.uv / 11;
+        accent: Theme.uv-color(cur.uv);
+    }
+    MetricTile {
+        x: 656px;
+        y: 161px;
+        width: 170px;
+        height: 139px;
+        title: "VISIBILITY";
+        value: cur.visibility;
+        unit: "km";
+        sub: "Cloud cover " + Math.round(cur.cloud) + "%";
+        fraction: cur.cloud / 100;
+        accent: #94a3b8;
+    }
+    MetricTile {
+        x: 840px;
+        y: 161px;
+        width: 164px;
+        height: 139px;
+        title: "PRECIP";
+        value: cur.precip;
+        unit: "mm";
+        sub: "Rain " + cur.rain + " · Snow " + cur.snow;
+        accent: Theme.accent;
+    }
+
+    // ── Next hours strip ─────────────────────────────────────────
+    Card {
+        x: 20px;
+        y: 314px;
+        width: 984px;
+        height: 130px;
+
+        Caption {
+            x: 20px;
+            y: 10px;
+            text: "NEXT HOURS";
+        }
+
+        for h[i] in root.hours: Rectangle {
+            visible: i < 8;
+            x: 12px + i * 120px;
+            y: 30px;
+            width: 120px;
+            height: 94px;
+
+            Text {
+                y: 0px;
+                width: parent.width;
+                text: i == 0 ? "Now" : h.time;
+                horizontal-alignment: center;
+                color: Theme.muted;
+                font-family: Theme.font;
+                font-size: 15px;
+            }
+            Text {
+                y: 20px;
+                width: parent.width;
+                text: h.icon;
+                horizontal-alignment: center;
+                font-family: Theme.icon-font;
+                font-size: 32px;
+                color: Theme.warm;
+            }
+            Text {
+                y: 56px;
+                width: parent.width;
+                text: h.temp + "°";
+                horizontal-alignment: center;
+                color: Theme.text;
+                font-family: Theme.font;
+                font-size: 22px;
+                font-weight: 700;
+            }
+            Text {
+                y: 82px;
+                width: parent.width;
+                text: h.rain-pct > 0 ? h.rain-pct + "%" : "";
+                horizontal-alignment: center;
+                color: #38bdf8;
+                font-family: Theme.font;
+                font-size: 12px;
+            }
+        }
+    }
+}

@@ -1,0 +1,12 @@
+# ESP32-P4 7" (Waveshare layout, 32 MB flash). Same offsets as the factory firmware,
+# so flashing the app only replaces `factory`; NVS, OTA slots, assets and storage stay.
+# Name,     Type, SubType, Offset,    Size,     Flags
+nvsfactory, data, nvs,     0x9000,    0x32000,
+nvs,        data, nvs,     0x3b000,   0xd2000,
+otadata,    data, ota,     0x10d000,  0x2000,
+phy_init,   data, phy,     0x10f000,  0x1000,
+factory,    app,  factory, 0x110000,  0x900000,
+ota_0,      app,  ota_0,   0xa10000,  0x3f0000,
+ota_1,      app,  ota_1,   0xe00000,  0x3f0000,
+assets,     data, 0x82,    0x11f0000, 0x900000,
+storage,    data, 0x82,    0x1af0000, 0x500000,

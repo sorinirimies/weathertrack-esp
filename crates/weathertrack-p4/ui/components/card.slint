@@ -1,0 +1,18 @@
+import { Theme } from "../theme.slint";
+
+export component Card inherits Rectangle {
+    in property <bool> highlight: false;
+    background: highlight ? Theme.card-hi : Theme.card;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.card-border;
+}
+
+// Small caption used at the top of a card.
+export component Caption inherits Text {
+    color: Theme.muted;
+    font-family: Theme.font;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}

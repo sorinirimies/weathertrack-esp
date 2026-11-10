@@ -6,6 +6,8 @@ exclude = [
     "crates/weathertrack-tui",
     "crates/weathertrack-gui",
     "crates/weathertrack-hal",
+    "crates/weathertrack-p4",
+    "crates/weathertrack-p4-preview",
 ]
 resolver = "2"
 

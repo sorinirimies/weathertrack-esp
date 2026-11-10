@@ -99,6 +99,39 @@ run-tui-release: gen-sdkconfig
 run-gui-release: gen-sdkconfig
     cd crates/weathertrack-gui && cargo run --release
 
+# ── ESP32-P4 · Waveshare 7" touch (crates/weathertrack-p4) ────────────────────
+
+# Render every P4 UI tab to PNG on the host (no hardware needed) → target/p4-ui/
+preview-p4:
+    cd crates/weathertrack-p4-preview && cargo run --release -- ../../target/p4-ui
+
+# Generate crates/weathertrack-p4/sdkconfig.defaults (absolute partition path)
+gen-sdkconfig-p4:
+    sd '@PARTITIONS@' "$(pwd)/crates/weathertrack-p4/partitions.csv" < crates/weathertrack-p4/sdkconfig.defaults.in > crates/weathertrack-p4/sdkconfig.defaults
+
+# Build the P4 firmware (debug)
+build-p4: gen-sdkconfig-p4
+    cd crates/weathertrack-p4 && cargo build
+
+# Build the P4 firmware (release)
+build-p4-release: gen-sdkconfig-p4
+    cd crates/weathertrack-p4 && cargo build --release
+
+# Flash the release firmware to the board and open the serial monitor
+flash-p4 *port: build-p4-release
+    #!/usr/bin/env sh
+    set -e
+    cd crates/weathertrack-p4
+    out=target/riscv32imafc-esp-espidf/release
+    bl=$(fd -HI -t f '^bootloader.bin$' "$out/build/esp-idf-sys" | xargs ls -t | head -n1)
+    [ -n "$bl" ] || { echo "bootloader.bin not found under $out/build"; exit 1; }
+    espflash flash --chip esp32p4 --flash-size 32mb --partition-table partitions.csv \
+        --bootloader "$bl" --monitor {{ if port != "" { "--port " + port } else { "" } }} "$out/weathertrack-p4"
+
+# Back up the board's current flash (32 MB) before overwriting it
+backup-p4 file="p4-factory-backup.bin" *port:
+    espflash read-flash {{ if port != "" { "--port " + port } else { "" } }} 0 0x2000000 {{file}}
+
 # ── Test ──────────────────────────────────────────────────────────────────────
 
 # Run the core library test suite

@@ -1,0 +1,148 @@
+import { Theme } from "../theme.slint";
+import { DayData } from "../types.slint";
+import { Card } from "../components/card.slint";
+
+export component WeekPage inherits Rectangle {
+    in property <[DayData]> days;
+    in property <float> week-min;
+    in property <float> week-max;
+
+    property <length> bar-x: 590px;
+    property <length> bar-w: 240px;
+
+    Card {
+        x: 20px;
+        y: 8px;
+        width: 984px;
+        height: 436px;
+
+        for d[i] in root.days: Rectangle {
+            visible: i < 7;
+            x: 0px;
+            y: 10px + i * 59px;
+            width: parent.width;
+            height: 58px;
+
+            if i > 0: Rectangle {
+                y: 0px;
+                x: 24px;
+                width: parent.width - 48px;
+                height: 1px;
+                background: #243556;
+            }
+
+            Text {
+                x: 28px;
+                width: 120px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: i == 0 ? "Today" : d.weekday;
+                color: Theme.text;
+                font-family: Theme.font;
+                font-size: 22px;
+                font-weight: 700;
+            }
+            Text {
+                x: 140px;
+                width: 60px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: d.date;
+                color: Theme.faint;
+                font-family: Theme.font;
+                font-size: 15px;
+            }
+            Text {
+                x: 210px;
+                width: 56px;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+                text: d.icon;
+                font-family: Theme.icon-font;
+                font-size: 32px;
+                color: Theme.warm;
+            }
+            Text {
+                x: 280px;
+                width: 150px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: d.condition;
+                color: Theme.muted;
+                font-family: Theme.font;
+                font-size: 18px;
+                overflow: elide;
+            }
+            Text {
+                x: 440px;
+                width: 70px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: d.rain-pct + "%";
+                color: d.rain-pct >= 50 ? #38bdf8 : Theme.faint;
+                font-family: Theme.font;
+                font-size: 18px;
+                font-weight: 700;
+            }
+            Text {
+                x: 520px;
+                width: 56px;
+                height: parent.height;
+                vertical-alignment: center;
+                horizontal-alignment: right;
+                text: d.low + "°";
+                color: Theme.muted;
+                font-family: Theme.font;
+                font-size: 20px;
+            }
+
+            // Range bar
+            Rectangle {
+                x: root.bar-x;
+                y: (parent.height - 10px) / 2;
+                width: root.bar-w;
+                height: 10px;
+                border-radius: 5px;
+                background: #0d1730;
+
+                Rectangle {
+                    property <float> span: Math.max(1, root.week-max - root.week-min);
+                    y: 0px;
+                    x: parent.width * (d.low-val - root.week-min) / span;
+                    width: Math.max(10px, parent.width * (d.high-val - d.low-val) / span);
+                    height: parent.height;
+                    border-radius: 5px;
+                    background: @linear-gradient(90deg, Theme.temp-color(d.low-val), Theme.temp-color(d.high-val));
+                }
+            }
+
+            Text {
+                x: root.bar-x + root.bar-w + 14px;
+                width: 56px;
+                height: parent.height;
+                vertical-alignment: center;
+                text: d.high + "°";
+                color: Theme.text;
+                font-family: Theme.font;
+                font-size: 22px;
+                font-weight: 700;
+            }
+            Rectangle {
+                x: 900px;
+                y: (parent.height - 28px) / 2;
+                width: 60px;
+                height: 28px;
+                border-radius: 14px;
+                background: Theme.uv-color(d.uv).with-alpha(0.25);
+                Text {
+                    text: "UV " + Math.round(d.uv);
+                    color: Theme.uv-color(d.uv);
+                    font-family: Theme.font;
+                    font-size: 14px;
+                    font-weight: 700;
+                }
+            }
+        }
+    }
+}

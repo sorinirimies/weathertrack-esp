@@ -46,3 +46,7 @@ ehthumbs.db
 .env.*
 secrets.*
 config.toml
+
+# Local-only: flash dumps of the original board firmware, code index
+backups/
+.codegraph/

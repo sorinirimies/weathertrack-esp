@@ -1,0 +1,70 @@
+import { Theme } from "../theme.slint";
+import { Card, Caption } from "card.slint";
+
+// One small stat: caption, big value + unit, and a sub line / optional bar.
+export component MetricTile inherits Card {
+    in property <string> title;
+    in property <string> value;
+    in property <string> unit;
+    in property <string> sub;
+    in property <color> accent: Theme.accent;
+    // 0..1; negative hides the bar.
+    in property <float> fraction: -1;
+
+    Caption {
+        x: 16px;
+        y: 14px;
+        text: root.title;
+    }
+
+    HorizontalLayout {
+        x: 16px;
+        y: 38px;
+        height: 46px;
+        spacing: 6px;
+        alignment: start;
+        Text {
+            text: root.value;
+            color: Theme.text;
+            font-family: Theme.font;
+            font-size: 36px;
+            font-weight: 700;
+            vertical-alignment: bottom;
+        }
+        Text {
+            text: root.unit;
+            color: Theme.muted;
+            font-family: Theme.font;
+            font-size: 18px;
+            vertical-alignment: bottom;
+        }
+    }
+
+    Text {
+        x: 16px;
+        y: root.fraction >= 0 ? root.height - 50px : root.height - 34px;
+        width: root.width - 32px;
+        text: root.sub;
+        color: Theme.muted;
+        font-family: Theme.font;
+        font-size: 15px;
+        overflow: elide;
+    }
+
+    if root.fraction >= 0: Rectangle {
+        x: 16px;
+        y: root.height - 22px;
+        width: root.width - 32px;
+        height: 8px;
+        border-radius: 4px;
+        background: #0d1730;
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width * Math.min(1, Math.max(0, root.fraction));
+            height: parent.height;
+            border-radius: 4px;
+            background: root.accent;
+        }
+    }
+}

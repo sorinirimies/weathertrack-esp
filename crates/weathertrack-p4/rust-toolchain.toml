@@ -1,0 +1,5 @@
+[toolchain]
+# Pinned: nightlies after 2026-09 fail to build std for *-esp-espidf
+# (libc `stat` fields missing). Bump once upstream fixes it.
+channel = "nightly-2026-09-15"
+components = ["rust-src"]

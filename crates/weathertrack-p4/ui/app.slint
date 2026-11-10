@@ -1,0 +1,207 @@
+// WeatherTrack — ESP32-P4 7" (1024x600) touch UI.
+
+import "fonts/weather-icons.ttf";
+import "fonts/NotoSans-Regular.ttf";
+import "fonts/NotoSans-Bold.ttf";
+
+import { Theme } from "theme.slint";
+import { CurrentData, HourData, DayData, AlertData } from "types.slint";
+import { TodayPage } from "pages/today.slint";
+import { HourlyPage } from "pages/hourly.slint";
+import { WeekPage } from "pages/week.slint";
+import { DetailsPage } from "pages/details.slint";
+import { AlertsPage } from "pages/alerts.slint";
+
+export { CurrentData, HourData, DayData, AlertData }
+
+component TabButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    in property <int> badge: 0;
+    callback tapped();
+
+    Rectangle {
+        x: 8px;
+        y: 6px;
+        width: parent.width - 16px;
+        height: parent.height - 12px;
+        border-radius: 16px;
+        background: root.active ? Theme.card-hi : transparent;
+        border-width: root.active ? 1px : 0px;
+        border-color: Theme.accent.with-alpha(0.6);
+    }
+    Text {
+        text: root.label;
+        color: root.active ? Theme.accent : Theme.muted;
+        font-family: Theme.font;
+        font-size: 21px;
+        font-weight: 700;
+    }
+    if root.badge > 0: Rectangle {
+        x: parent.width / 2 + 40px;
+        y: 14px;
+        width: 26px;
+        height: 26px;
+        border-radius: 13px;
+        background: Theme.bad;
+        Text {
+            text: root.badge;
+            color: white;
+            font-family: Theme.font;
+            font-size: 14px;
+            font-weight: 700;
+        }
+    }
+    TouchArea { clicked => { root.tapped(); } }
+}
+
+export component WeatherApp inherits Window {
+    in property <bool> loading: true;
+    in property <string> loading-status: "Starting…";
+    in property <float> loading-progress: 0;
+
+    in property <CurrentData> current;
+    in property <[HourData]> hours;
+    in property <[DayData]> days;
+    in property <[AlertData]> alerts;
+
+    in property <image> hourly-chart;
+    in property <image> sun-arc;
+    in property <float> hourly-min;
+    in property <float> hourly-max;
+    in property <float> week-min;
+    in property <float> week-max;
+
+    in-out property <int> tab: 0;
+
+    width: 1024px;
+    height: 600px;
+    background: @linear-gradient(180deg, Theme.bg-top 0%, Theme.bg-bottom 100%);
+    default-font-family: Theme.font;
+
+    // Icon glyphs are chosen at runtime; Slint only embeds glyphs that appear
+    // as literals, so list every Weather Icons code point we use, at each size.
+    Text { visible: false; font-family: Theme.icon-font; font-size: 32px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+    Text { visible: false; font-family: Theme.icon-font; font-size: 120px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+
+    // ── Loading ──────────────────────────────────────────────────
+    if loading: Rectangle {
+        Text {
+            y: 190px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "\u{f00d}";
+            font-family: Theme.icon-font;
+            font-size: 120px;
+            color: Theme.warm;
+        }
+        Text {
+            y: 330px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "WeatherTrack";
+            color: Theme.text;
+            font-family: Theme.font;
+            font-size: 38px;
+            font-weight: 700;
+        }
+        Text {
+            y: 384px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: root.loading-status;
+            color: Theme.muted;
+            font-family: Theme.font;
+            font-size: 20px;
+        }
+        Rectangle {
+            x: (parent.width - 360px) / 2;
+            y: 430px;
+            width: 360px;
+            height: 8px;
+            border-radius: 4px;
+            background: #0d1730;
+            Rectangle {
+                x: 0px;
+                y: 0px;
+                width: parent.width * Math.min(1, Math.max(0.04, root.loading-progress));
+                height: parent.height;
+                border-radius: 4px;
+                background: Theme.accent;
+            }
+        }
+    }
+
+    // ── Header ───────────────────────────────────────────────────
+    if !loading: Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: 64px;
+
+        Text {
+            x: 28px;
+            y: 6px;
+            text: root.current.location;
+            color: Theme.text;
+            font-family: Theme.font;
+            font-size: 30px;
+            font-weight: 700;
+        }
+        Text {
+            x: 28px;
+            y: 45px;
+            text: root.current.updated;
+            color: Theme.faint;
+            font-family: Theme.font;
+            font-size: 14px;
+        }
+        Text {
+            x: parent.width - 28px - self.width;
+            y: 12px;
+            text: root.tab == 0 ? "Today" : root.tab == 1 ? "Hourly" : root.tab == 2 ? "7-day forecast" : root.tab == 3 ? "Details" : "Alerts";
+            color: Theme.muted;
+            font-family: Theme.font;
+            font-size: 22px;
+        }
+    }
+
+    // ── Pages ────────────────────────────────────────────────────
+    if !loading: Rectangle {
+        x: 0px;
+        y: 64px;
+        width: parent.width;
+        height: 464px;
+
+        if root.tab == 0: TodayPage { cur: root.current; hours: root.hours; }
+        if root.tab == 1: HourlyPage {
+            hours: root.hours;
+            chart: root.hourly-chart;
+            t-min: root.hourly-min;
+            t-max: root.hourly-max;
+        }
+        if root.tab == 2: WeekPage { days: root.days; week-min: root.week-min; week-max: root.week-max; }
+        if root.tab == 3: DetailsPage { cur: root.current; arc: root.sun-arc; }
+        if root.tab == 4: AlertsPage { alerts: root.alerts; }
+    }
+
+    // ── Tab bar ──────────────────────────────────────────────────
+    if !loading: Rectangle {
+        x: 0px;
+        y: 528px;
+        width: parent.width;
+        height: 72px;
+        background: #0a1224;
+
+        Rectangle { x: 0px; y: 0px; width: parent.width; height: 1px; background: #243556; }
+
+        HorizontalLayout {
+            padding: 4px;
+            TabButton { label: "Today";   active: root.tab == 0; tapped => { root.tab = 0; } }
+            TabButton { label: "Hourly";  active: root.tab == 1; tapped => { root.tab = 1; } }
+            TabButton { label: "7 Days";  active: root.tab == 2; tapped => { root.tab = 2; } }
+            TabButton { label: "Details"; active: root.tab == 3; tapped => { root.tab = 3; } }
+            TabButton { label: "Alerts";  active: root.tab == 4; badge: root.alerts.length; tapped => { root.tab = 4; } }
+        }
+    }
+}

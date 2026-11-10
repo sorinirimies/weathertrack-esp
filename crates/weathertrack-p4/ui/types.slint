@@ -1,0 +1,68 @@
+// Data model shared between Rust and the UI.
+
+export struct CurrentData {
+    location: string,
+    updated: string,
+    temperature: string,
+    temp-val: float,
+    feels-like: string,
+    high: string,
+    low: string,
+    condition: string,
+    icon: string,
+    humidity: float,
+    pressure: string,
+    pressure-label: string,
+    wind-speed: string,
+    wind-dir: string,
+    wind-deg: float,
+    gusts: string,
+    cloud: float,
+    precip: string,
+    rain: string,
+    snow: string,
+    visibility: string,
+    uv: float,
+    uv-label: string,
+    sunrise: string,
+    sunset: string,
+    daylight: string,
+    sun-progress: float,
+    is-day: bool,
+}
+
+export struct HourData {
+    time: string,
+    icon: string,
+    temp: string,
+    temp-val: float,
+    rain-pct: int,
+    wind: string,
+    // Position inside the hourly chart (px), computed in Rust.
+    x: length,
+    y: length,
+}
+
+export struct DayData {
+    weekday: string,
+    date: string,
+    icon: string,
+    condition: string,
+    high: string,
+    low: string,
+    high-val: float,
+    low-val: float,
+    rain-pct: int,
+    wind: string,
+    uv: float,
+    precip: string,
+}
+
+export struct AlertData {
+    icon: string,
+    event: string,
+    severity: string,
+    level: int,
+    description: string,
+    period: string,
+}

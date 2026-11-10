@@ -1,0 +1,56 @@
+[package]
+name = "weathertrack-p4"
+version = "0.1.0"
+edition = "2021"
+authors = ["Sorin Irimies"]
+license = "MIT"
+description = "WeatherTrack for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B (1024x600 MIPI-DSI touch)"
+resolver = "2"
+rust-version = "1.77"
+
+[[bin]]
+name = "weathertrack-p4"
+harness = false
+
+[profile.release]
+opt-level = 3
+
+[profile.dev]
+debug = true
+opt-level = "s"
+
+[dependencies]
+weathertrack-core = { path = "../weathertrack-core", default-features = false }
+log = "0.4"
+esp-idf-svc = { version = "0.53", features = ["experimental"] }
+esp-idf-hal = "0.47"
+serde_json = "1"
+anyhow = "1"
+
+# Slint, software renderer drawing straight into the DSI frame buffer (RGB565).
+slint = { version = "1.11", default-features = false, features = [
+    "compat-1-2",
+    "renderer-software",
+    "unsafe-single-threaded",
+    "libm",
+] }
+
+[build-dependencies]
+embuild = "0.33"
+slint-build = "1.11"
+toml = "0.8"
+
+# ── ESP-IDF extra components ──────────────────────────────────────────────────
+# Local C shim: MIPI-DSI panel (EK79007), backlight and GT911 touch.
+[[package.metadata.esp-idf-sys.extra_components]]
+component_dirs = ["components"]
+bindings_header = "components/wt_display/include/wt_display.h"
+bindings_module = "wt_display"
+
+# The ESP32-P4 has no radio: WiFi runs on the board's ESP32-C6 over SDIO.
+# Versions match Waveshare's own wifi example so they stay compatible with the
+# slave firmware that ships on the C6.
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_wifi_remote", version = "==1.2.5" }
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_hosted", version = "1.4.*" }
