@@ -93,6 +93,13 @@ fn apply_backlight(model: &Model) {
     }
 }
 
+/// Give the web dashboard the latest weather.
+fn publish(server: &Option<PlaceServer>, model: &Model) {
+    if let Some(s) = server {
+        s.set_view(ViewModel::from_model(model, 24));
+    }
+}
+
 fn main() {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -208,6 +215,7 @@ fn run() -> anyhow::Result<()> {
     if let (Some(_), Ok(ip)) = (&server, wifi.wifi().sta_netif().get_ip_info()) {
         model.config_url = Some(format!("http://{}/", ip.ip));
     }
+    publish(&server, &model);
 
     // ── First fetch ─────────────────────────────────────────────────
     loop {
@@ -261,6 +269,7 @@ fn run() -> anyhow::Result<()> {
                 s.set_place(now_at, source);
             }
             ui.show(&model, offline);
+    publish(&server, &model);
             manual = true;
         }
         if let Some(theme) = ui.take_theme_change() {
@@ -287,6 +296,7 @@ fn run() -> anyhow::Result<()> {
                     apply_backlight(&model);
                     offline = false;
                     ui.show(&model, offline);
+    publish(&server, &model);
                 }
                 Err(e) => {
                     log::warn!("refresh failed: {e}");

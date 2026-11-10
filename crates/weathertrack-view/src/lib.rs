@@ -7,9 +7,12 @@
 //! No UI dependencies: everything here is plain Rust and runs (and is tested) on the host.
 
 pub mod chart;
+pub mod html;
 #[doc(hidden)]
 pub mod sample;
+pub mod web;
 
+use serde::Serialize;
 use weathertrack_core::app::Model;
 use weathertrack_core::{
     AlertSeverity, CurrentWeather, DailyForecast, Forecast, HourlyForecast, WeatherAlert,
@@ -19,7 +22,7 @@ use weathertrack_core::{
 // ── view types ──────────────────────────────────────────────────────────────
 
 /// Current conditions, ready to show.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct CurrentView {
     /// "Updated 13:00".
     pub updated: String,
@@ -58,7 +61,7 @@ pub struct CurrentView {
 }
 
 /// One hour of the forecast.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct HourView {
     pub time: String,
     pub icon: String,
@@ -71,7 +74,7 @@ pub struct HourView {
 }
 
 /// One day of the forecast.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct DayView {
     pub weekday: String,
     /// "09/11".
@@ -90,7 +93,7 @@ pub struct DayView {
 }
 
 /// An active weather alert.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct AlertView {
     pub event: String,
     pub severity: String,
@@ -101,7 +104,7 @@ pub struct AlertView {
 }
 
 /// The place in use and how to change it.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct PlaceView {
     pub name: String,
     /// "49.323, 9.104".
@@ -113,7 +116,7 @@ pub struct PlaceView {
 }
 
 /// Everything a screen needs.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct ViewModel {
     pub location: String,
     pub place: PlaceView,

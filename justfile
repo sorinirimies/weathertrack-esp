@@ -93,6 +93,10 @@ preview-tui:
 preview-themes:
     cd crates/weathertrack-tui-preview; with-env {THEMES: "1"} { cargo run --release -- ../../target/tui-ui }
 
+# Write the device's web pages with sample data to target/site/ (open weather.html in a browser)
+preview-web:
+    cargo run -q -p weathertrack-view --example site -- target/site
+
 # Refresh the screenshots in docs/screenshots/ from the previews
 screenshots: preview-p4 preview-gui preview-tui preview-themes
     nu scripts/screenshots.nu

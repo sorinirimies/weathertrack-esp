@@ -47,6 +47,13 @@ fn heap_note(what: &str) {
     log::info!("heap {what}: free {free}, largest block {largest}");
 }
 
+/// Give the web dashboard the latest weather.
+fn publish(server: &Option<PlaceServer>, model: &app::Model) {
+    if let Some(s) = server {
+        s.set_view(weathertrack_view::ViewModel::from_model(model, 24));
+    }
+}
+
 /// Eight big pages (now, hours, chart, week, wind + humidity, UV + pressure, sun + rain, your
 /// place), plus alerts while there are any.
 fn page_count(model: &app::Model) -> i32 {
@@ -194,6 +201,7 @@ fn main() {
     if let (Some(_), Ok(ip)) = (&server, _wifi.wifi().sta_netif().get_ip_info()) {
         model.config_url = Some(format!("http://{}/", ip.ip));
     }
+    publish(&server, &model);
     let mut offline = false;
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
@@ -215,6 +223,7 @@ fn main() {
     // ── Show weather ────────────────────────────────────────────────
     heap_note("before sync");
     bridge::sync_all(&slint_app, &model);
+    publish(&server, &model);
     heap_note("after sync");
     slint_app.set_offline(offline);
     let mut page: i32 = 0;
@@ -250,6 +259,7 @@ fn main() {
                 s.set_place(now_at, source);
             }
             bridge::sync_all(&slint_app, &model);
+    publish(&server, &model);
             last_fetch = ticks.wrapping_sub(REFRESH_MS); // fetch the new place right away
         }
 
@@ -273,6 +283,7 @@ fn main() {
                 Ok(f) => {
                     app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
                     bridge::sync_all(&slint_app, &model);
+    publish(&server, &model);
                     offline = false;
                     let count = page_count(&model);
                     slint_app.set_page_count(count);

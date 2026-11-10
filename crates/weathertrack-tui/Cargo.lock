@@ -2012,6 +2012,7 @@ dependencies = [
  "log",
  "serde_json",
  "weathertrack-core",
+ "weathertrack-view",
  "ws2812-esp32-rmt-driver",
 ]
 
@@ -2049,6 +2050,8 @@ dependencies = [
 name = "weathertrack-view"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "weathertrack-core",
 ]
 

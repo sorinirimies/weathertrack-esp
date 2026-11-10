@@ -8,6 +8,7 @@ description = "ESP32 hardware abstraction for weathertrack (LED, WiFi, NVS, SD, 
 
 [dependencies]
 weathertrack-core = { path = "../weathertrack-core" }
+weathertrack-view = { path = "../weathertrack-view" }
 log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["experimental"] }
 esp-idf-hal = "0.45.2"

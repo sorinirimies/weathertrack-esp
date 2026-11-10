@@ -125,9 +125,16 @@ pub enum Action {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response {
     pub status: u16,
+    /// The body (HTML unless `content_type` says otherwise).
     pub html: String,
+    pub content_type: &'static str,
     pub action: Option<Action>,
 }
+
+/// `Content-Type` of the HTML pages.
+pub const HTML: &str = "text/html; charset=utf-8";
+/// `Content-Type` of the JSON endpoints.
+pub const JSON: &str = "application/json";
 
 /// City search used by the page; the firmware implements it with an HTTPS call.
 pub trait Geocoder {
@@ -140,7 +147,7 @@ const MAX_QUERY: usize = 60;
 /// Answer one request.
 pub fn route(req: &Request, ctx: &Context, geo: &dyn Geocoder) -> Response {
     match (req.method, req.path) {
-        (Method::Get, "/") => {
+        (Method::Get, "/" | "/place") => {
             let params = parse_query(req.query);
             let q = param(&params, "q").unwrap_or("").trim();
             if q.is_empty() {
@@ -207,7 +214,14 @@ pub fn route(req: &Request, ctx: &Context, geo: &dyn Geocoder) -> Response {
         ),
         _ => Response {
             status: 404,
-            html: shell("Not found", "<p>Not found. <a href=\"/\">Back</a></p>"),
+            content_type: HTML,
+            html: page_shell(
+                "Not found",
+                Nav::None,
+                "",
+                "",
+                "<div class=card><p>Not found. <a href=\"/\" style=\"color:var(--accent)\">Back to the weather</a></p></div>",
+            ),
             action: None,
         },
     }
@@ -215,18 +229,49 @@ pub fn route(req: &Request, ctx: &Context, geo: &dyn Geocoder) -> Response {
 
 // ── rendering ───────────────────────────────────────────────────────────────
 
-fn shell(title: &str, body: &str) -> String {
+/// Which link of the navigation bar is highlighted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Nav {
+    Weather,
+    Place,
+    None,
+}
+
+/// Styles shared by every page (the palette matches the apps on the device).
+pub const BASE_CSS: &str = "\
+:root{--bg:#0a1327;--card:#16233f;--card2:#1d2f55;--line:#2a3d66;--text:#eef3ff;--muted:#8fa3cc;--faint:#5b6d94;--accent:#4cc9f0;--warm:#ffb703;--good:#4ade80;--rain:#38bdf8}\
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:linear-gradient(180deg,#0a1327,#101f3d) fixed;color:var(--text);min-height:100vh}\
+.wrap{max-width:62rem;margin:0 auto;padding:1rem}.narrow{max-width:34rem}\
+nav{display:flex;gap:.4rem;align-items:center;margin-bottom:1.2rem}nav .brand{font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:auto;font-size:.9rem}\
+nav a{color:var(--muted);text-decoration:none;padding:.45rem 1rem;border-radius:2rem;border:1px solid transparent}nav a.on{color:var(--accent);background:var(--card2);border-color:var(--accent)}\
+.card{background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:1rem}.m{color:var(--muted)}h2{font-size:2rem;margin:.2rem 0}\
+.msg{background:var(--card);border:1px solid var(--line);border-radius:.8rem;padding:.8rem;margin:1rem 0}\
+input,button{font:inherit;border-radius:.7rem;border:1px solid var(--line);background:var(--card);color:var(--text);padding:.7rem}\
+input[type=search]{width:calc(100% - 6rem)}button{cursor:pointer}button.go{background:var(--accent);color:#0a1327;border:0;font-weight:700}\
+ul{list-style:none;padding:0}li{margin:.5rem 0}li button{width:100%;text-align:left}small{color:var(--muted);display:block}";
+
+/// A full HTML page: navigation bar, `body`, shared styles plus `extra_css`, optional `<head>` extras.
+pub fn page_shell(
+    title: &str,
+    active: Nav,
+    extra_css: &str,
+    head_extra: &str,
+    body: &str,
+) -> String {
+    let link = |href: &str, label: &str, on: bool| {
+        format!(
+            "<a href=\"{href}\"{}>{label}</a>",
+            if on { " class=on" } else { "" }
+        )
+    };
     format!(
         "<!doctype html><html lang=en><head><meta charset=utf-8>\
-<meta name=viewport content=\"width=device-width,initial-scale=1\"><title>{}</title><style>\
-body{{font-family:system-ui,sans-serif;background:#0a1327;color:#eef3ff;max-width:30rem;margin:0 auto;padding:1rem}}\
-h1{{font-size:1.1rem;color:#8fa3cc;letter-spacing:.08em;text-transform:uppercase}}\
-h2{{font-size:2rem;margin:.2rem 0}}.m{{color:#8fa3cc}}.msg{{background:#16233f;border:1px solid #2a3d66;border-radius:.6rem;padding:.7rem;margin:1rem 0}}\
-input,button{{font:inherit;border-radius:.6rem;border:1px solid #2a3d66;background:#16233f;color:#eef3ff;padding:.7rem}}\
-input[type=search]{{width:calc(100% - 6rem)}}button{{cursor:pointer}}button.go{{background:#4cc9f0;color:#0a1327;border:0;font-weight:700}}\
-ul{{list-style:none;padding:0}}li{{margin:.5rem 0}}li button{{width:100%;text-align:left}}small{{color:#8fa3cc;display:block}}\
-</style></head><body><h1>WeatherTrack</h1>{body}</body></html>",
-        escape_html(title)
+<meta name=viewport content=\"width=device-width,initial-scale=1\"><meta name=color-scheme content=dark>{head_extra}<title>{}</title><style>{BASE_CSS}{extra_css}</style></head>\
+<body><div class=\"wrap{}\"><nav><span class=brand>WeatherTrack</span>{}{}</nav>{body}</div></body></html>",
+        escape_html(title),
+        if active == Nav::Place { " narrow" } else { "" },
+        link("/", "Weather", active == Nav::Weather),
+        link("/place", "Place", active == Nav::Place),
     )
 }
 
@@ -239,7 +284,7 @@ fn page(
     action: Option<Action>,
 ) -> Response {
     let mut b = format!(
-        "<p class=m>Showing the weather for</p><h2>{}</h2><p class=m>{:.3}, {:.3} · {}</p>",
+        "<div class=card><p class=m>Showing the weather for</p><h2>{}</h2><p class=m>{:.3}, {:.3} · {}</p></div>",
         escape_html(&ctx.current.name),
         ctx.current.lat,
         ctx.current.lon,
@@ -249,7 +294,7 @@ fn page(
         b.push_str(&format!("<div class=msg>{}</div>", escape_html(m)));
     }
     b.push_str(&format!(
-        "<form method=get action=/><input type=search name=q placeholder=\"Search a city\" value=\"{}\" maxlength=60 autofocus> <button class=go>Search</button></form>",
+        "<form method=get action=/place><input type=search name=q placeholder=\"Search a city\" value=\"{}\" maxlength=60 autofocus> <button class=go>Search</button></form>",
         escape_html(query)
     ));
     if !found.is_empty() {
@@ -277,7 +322,8 @@ fn page(
     );
     Response {
         status,
-        html: shell("WeatherTrack", &b),
+        content_type: HTML,
+        html: page_shell("WeatherTrack - place", Nav::Place, "", "", &b),
         action,
     }
 }

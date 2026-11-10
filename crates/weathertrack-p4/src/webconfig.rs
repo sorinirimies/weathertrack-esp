@@ -9,8 +9,9 @@ use esp_idf_svc::http::server::{Configuration, EspHttpServer};
 use esp_idf_svc::http::Method as HttpMethod;
 use esp_idf_svc::io::Write;
 use weathertrack_core::place::{Place, PlaceChoice, PlaceSource};
-use weathertrack_core::web::{route, Action, Context, Geocoder, Method, Request};
+use weathertrack_core::web::{Action, Context, Geocoder, Method, Request};
 use weathertrack_core::{build_geocode_url, parse_geocode, Location};
+use weathertrack_view::{web as site, ViewModel};
 
 use crate::net;
 
@@ -30,6 +31,8 @@ impl Geocoder for NetGeocoder {
 struct Shared {
     ctx: Mutex<Context>,
     pending: Mutex<Option<PlaceChoice>>,
+    /// The latest weather, for the dashboard page.
+    view: Mutex<ViewModel>,
 }
 
 /// The running web server and what it shares with the main loop.
@@ -41,7 +44,11 @@ pub struct PlaceServer {
 impl PlaceServer {
     /// Start serving; `current` is what the page shows until [`set_place`](Self::set_place).
     pub fn start(current: Place, source: PlaceSource) -> anyhow::Result<Self> {
-        let shared = Arc::new(Shared { ctx: Mutex::new(Context { current, source }), pending: Mutex::new(None) });
+        let shared = Arc::new(Shared {
+            ctx: Mutex::new(Context { current, source }),
+            pending: Mutex::new(None),
+            view: Mutex::new(ViewModel::default()),
+        });
         let mut server = EspHttpServer::new(&Configuration {
             // TLS for the city search runs on the server task: it needs a big stack.
             stack_size: 20 * 1024,
@@ -78,6 +85,13 @@ impl PlaceServer {
         }
     }
 
+    /// Give the dashboard the latest weather.
+    pub fn set_view(&self, view: ViewModel) {
+        if let Ok(mut v) = self.shared.view.lock() {
+            *v = view;
+        }
+    }
+
     /// The choice the user made on the page since the last call, if any.
     pub fn take_choice(&self) -> Option<PlaceChoice> {
         self.shared.pending.lock().ok()?.take()
@@ -92,7 +106,8 @@ fn respond(
     body: &str,
 ) -> anyhow::Result<()> {
     let ctx = shared.ctx.lock().map_err(|_| anyhow::anyhow!("state poisoned"))?.clone();
-    let response = route(&Request::new(method, uri, body), &ctx, &NetGeocoder);
+    let view = shared.view.lock().map_err(|_| anyhow::anyhow!("state poisoned"))?.clone();
+    let response = site::route(&Request::new(method, uri, body), &ctx, &NetGeocoder, &view);
     if let Some(Action::Choose(choice)) = response.action {
         if let Ok(mut ctx) = shared.ctx.lock() {
             if let PlaceChoice::Manual(p) = &choice {
@@ -103,7 +118,7 @@ fn respond(
             *pending = Some(choice);
         }
     }
-    let mut out = req.into_response(response.status, None, &[("Content-Type", "text/html; charset=utf-8")])?;
+    let mut out = req.into_response(response.status, None, &[("Content-Type", response.content_type)])?;
     out.write_all(response.html.as_bytes())?;
     Ok(())
 }

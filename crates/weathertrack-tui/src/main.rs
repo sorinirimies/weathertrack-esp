@@ -44,6 +44,13 @@ const DEFAULTS: nvs::ConfigDefaults = nvs::ConfigDefaults {
     location: "Cluj-Napoca",
 };
 
+/// Give the web dashboard the latest weather.
+fn publish(server: &Option<PlaceServer>, view: &ViewModel) {
+    if let Some(s) = server {
+        s.set_view(view.clone());
+    }
+}
+
 /// NVS key of the selected colour theme.
 const THEME_KEY: &str = "theme";
 /// Holding BOOT this long (ms) changes the theme instead of the page.
@@ -212,6 +219,7 @@ fn main() {
     if let (Some(_), Ok(ip)) = (&server, _wifi.wifi().sta_netif().get_ip_info()) {
         model.config_url = Some(format!("http://{}/", ip.ip));
     }
+    publish(&server, &ViewModel::from_model(&model, HOURS));
     splash::draw_status(
         &mut display,
         3,
@@ -291,6 +299,7 @@ fn main() {
     };
     let mut pressed_at: Option<u32> = None;
     let mut view = ViewModel::from_model(&model, HOURS);
+    publish(&server, &view);
     let mut redraw = true;
 
     loop {
@@ -313,6 +322,7 @@ fn main() {
                 s.set_place(now_at, source);
             }
             view = ViewModel::from_model(&model, HOURS);
+            publish(&server, &view);
             redraw = true;
             last_fetch = ticks.wrapping_sub(REFRESH_MS); // fetch the new place right away
         }
@@ -378,6 +388,7 @@ fn main() {
             }
             ui_state.refreshing = false;
             view = ViewModel::from_model(&model, HOURS);
+            publish(&server, &view);
             redraw = true;
             last_fetch = ticks;
         }

@@ -59,3 +59,10 @@ path = "fuzz_targets/place_web.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "dashboard"
+path = "fuzz_targets/dashboard.rs"
+test = false
+doc = false
+bench = false

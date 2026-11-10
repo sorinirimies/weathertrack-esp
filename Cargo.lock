@@ -481,6 +481,8 @@ dependencies = [
 name = "weathertrack-view"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "weathertrack-core",
 ]
 

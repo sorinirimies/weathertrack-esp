@@ -51,11 +51,25 @@ Terminal UI, 7 days on the C6:
 
 ![C6 TUI week](docs/screenshots/c6-tui-week.png)
 
+### The device's website
+
+Every board also serves a small website on its WiFi address (shown on the Place page, e.g. `http://192.168.3.210/`): the same weather as the screens, readable on a phone or a laptop, refreshing itself every minute.
+
+| Desktop (live from the C6) | Phone |
+|---|---|
+| ![dashboard](docs/screenshots/web-dashboard.png) | ![phone](docs/screenshots/web-phone.png) |
+
+- `/` the weather: now, details, alerts, a 24-hour chart (inline SVG) and the next days
+- `/place` change the place (see below)
+- `/api/weather.json` the same data as JSON, for scripts and other apps
+
+It is server-rendered HTML from plain functions in `weathertrack-view` (no JavaScript, no framework, about 14 KB per page), so it is unit-tested and fuzzed on the host and light enough for the ESP32-C6. A Topcoat app would not fit there (it needs tokio and a full HTTP stack); a PC-side companion built on Topcoat could reuse the same view model. `just preview-web` writes the pages with sample data to `target/site/`. The pages have no login: anyone on your WiFi can open them and change the place.
+
 ### Choosing the place
 
 By default every board looks up where it is from the network on boot (IP geolocation: city level, and an ISP's registered city can be tens of kilometres off). To pick the place yourself, no keyboard needed:
 
-1. Open the **Place** page on the device. It shows the place in use, where it came from, and an address like `http://192.168.3.210/`.
+1. Open the **Place** page on the device (or the **Place** link on the website). It shows the place in use, where it came from, and an address like `http://192.168.3.210/`.
 2. Open that address on a phone or computer on the same WiFi, type a city and tap the right result (Open-Meteo geocoding, no key).
 3. The device switches at once and remembers the choice across reboots. **Use my network location** goes back to automatic.
 
