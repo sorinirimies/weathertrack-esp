@@ -105,6 +105,26 @@ preview-web:
 screenshots: preview-p4 preview-gui preview-tui preview-themes
     nu scripts/screenshots.nu
 
+# Build the P4 firmware with the screenshot endpoint (release; for `just screenshots-p4`)
+build-p4-shots: gen-sdkconfig-p4
+    cd crates/weathertrack-p4; cargo build --release --features shots
+
+# Same, with the terminal UI
+build-p4-tui-shots: gen-sdkconfig-p4
+    cd crates/weathertrack-p4; cargo build --release --no-default-features --features tui,shots
+
+# Flash the Slint screenshot build (then: just screenshots-p4 <ip> slint)
+flash-p4-shots port="": build-p4-shots
+    nu scripts/esp.nu flash-p4 --port "{{ port }}"
+
+# Flash the terminal-UI screenshot build (then: just screenshots-p4 <ip> tui)
+flash-p4-tui-shots port="": build-p4-tui-shots
+    nu scripts/esp.nu flash-p4 --port "{{ port }}"
+
+# Screenshots of the real P4 screen into docs/screenshots (ui: slint or tui)
+screenshots-p4 ip ui:
+    nu scripts/p4_shots.nu {{ ip }} {{ ui }}
+
 # Generate crates/weathertrack-p4/sdkconfig.defaults (absolute partition path)
 gen-sdkconfig-p4:
     nu scripts/esp.nu gen-sdkconfig-p4

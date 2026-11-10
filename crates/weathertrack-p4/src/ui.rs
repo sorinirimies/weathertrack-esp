@@ -47,4 +47,7 @@ pub trait Ui {
     fn take_saved_edit(&mut self) -> Option<SavedEdit> {
         None
     }
+    /// Show what a screenshot request asks for (page, search, theme).
+    #[cfg(feature = "shots")]
+    fn show_page(&mut self, _req: &weathertrack_core::screenshot::ShotRequest) {}
 }

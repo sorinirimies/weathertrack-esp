@@ -41,6 +41,8 @@ struct Shared {
     pending_saved: Mutex<Option<SavedPlaces>>,
     /// The latest weather, for the dashboard page.
     view: Mutex<ViewModel>,
+    #[cfg(feature = "shots")]
+    shot: crate::shots::Slot,
 }
 
 /// The running web server and what it shares with the main loop.
@@ -57,6 +59,8 @@ impl PlaceServer {
             pending: Mutex::new(None),
             pending_saved: Mutex::new(None),
             view: Mutex::new(ViewModel::default()),
+            #[cfg(feature = "shots")]
+            shot: crate::shots::Slot::default(),
         });
         let mut server = EspHttpServer::new(&Configuration {
             // TLS for the city search runs on the server task: it needs a big stack.
@@ -114,6 +118,18 @@ impl PlaceServer {
         self.shared.pending_saved.lock().ok()?.take()
     }
 
+    /// A screenshot request waiting for the main loop to change the page.
+    #[cfg(feature = "shots")]
+    pub fn take_shot(&self) -> Option<weathertrack_core::screenshot::ShotRequest> {
+        self.shared.shot.take()
+    }
+
+    /// The page was changed: the handler may capture the screen now.
+    #[cfg(feature = "shots")]
+    pub fn shot_done(&self) {
+        self.shared.shot.finish();
+    }
+
     /// The choice the user made on the page since the last call, if any.
     pub fn take_choice(&self) -> Option<PlaceChoice> {
         self.shared.pending.lock().ok()?.take()
@@ -127,6 +143,10 @@ fn respond(
     uri: &str,
     body: &str,
 ) -> anyhow::Result<()> {
+    #[cfg(feature = "shots")]
+    if method == Method::Get && uri.starts_with("/screenshot.bmp") {
+        return screenshot(shared, req, uri);
+    }
     let ctx = shared.ctx.lock().map_err(|_| anyhow::anyhow!("state poisoned"))?.clone();
     let view = shared.view.lock().map_err(|_| anyhow::anyhow!("state poisoned"))?.clone();
     let response = site::route(&Request::new(method, uri, body), &ctx, &NetGeocoder, &view);
@@ -152,5 +172,32 @@ fn respond(
     }
     let mut out = req.into_response(response.status, None, &[("Content-Type", response.content_type)])?;
     out.write_all(response.html.as_bytes())?;
+    Ok(())
+}
+
+/// Stream the screen as a BMP, after showing the requested page.
+#[cfg(feature = "shots")]
+fn screenshot(
+    shared: &Shared,
+    req: esp_idf_svc::http::server::Request<&mut esp_idf_svc::http::server::EspHttpConnection<'_>>,
+    uri: &str,
+) -> anyhow::Result<()> {
+    use crate::hw::{HEIGHT, WIDTH};
+    use crate::shots::row;
+    use weathertrack_core::screenshot::{bmp_rgb565_header, bmp_rgb565_len, ShotRequest};
+    let wanted = ShotRequest::parse(uri);
+    if wanted.changes_page() && !shared.shot.show(wanted) {
+        let mut out = req.into_response(504, None, &[("Content-Type", "text/plain")])?;
+        out.write_all(b"the main loop did not answer")?;
+        return Ok(());
+    }
+    let len = bmp_rgb565_len(WIDTH, HEIGHT).to_string();
+    let mut out = req.into_response(200, None, &[("Content-Type", "image/bmp"), ("Content-Length", &len)])?;
+    out.write_all(&bmp_rgb565_header(WIDTH, HEIGHT))?;
+    let mut line = vec![0u8; WIDTH * 2];
+    for y in (0..HEIGHT).rev() {
+        row(y, &mut line);
+        out.write_all(&line)?;
+    }
     Ok(())
 }

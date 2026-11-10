@@ -44,6 +44,8 @@ weathertrack-tui-ui = { path = "../weathertrack-tui-ui", optional = true }
 default = ["slint-ui"]
 # Exactly one of the two (see main.rs): `cargo build --no-default-features --features tui`.
 slint-ui = ["dep:slint"]
+# Screenshots of the real screen over HTTP (`GET /screenshot.bmp`); not for normal builds.
+shots = []
 tui = ["dep:ratatui", "dep:mousefood", "dep:weathertrack-tui-ui"]
 
 [build-dependencies]

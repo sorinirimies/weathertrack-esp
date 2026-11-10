@@ -293,4 +293,24 @@ impl Ui for TuiUi {
     fn take_saved_edit(&mut self) -> Option<SavedEdit> {
         self.edit.take()
     }
+
+    #[cfg(feature = "shots")]
+    fn show_page(&mut self, req: &weathertrack_core::screenshot::ShotRequest) {
+        if let Some(t) = req.tab {
+            self.state.tab = t;
+        }
+        if let Some(theme) = req.theme {
+            self.state.theme = theme % theme_count();
+        }
+        match &req.search {
+            Some(q) => {
+                self.state.place.searching = true;
+                self.state.place.query = q.clone();
+                self.search = Some(q.clone());
+            }
+            None if req.tab.is_some() => self.state.place.searching = false,
+            None => {}
+        }
+        self.draw();
+    }
 }

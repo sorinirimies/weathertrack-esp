@@ -12,6 +12,7 @@ pub mod location;
 pub mod openmeteo;
 pub mod place;
 pub mod saved;
+pub mod screenshot;
 pub mod sync;
 pub mod types;
 pub mod web;

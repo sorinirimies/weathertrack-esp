@@ -17,6 +17,8 @@ mod hw;
 mod net;
 mod place;
 mod store;
+#[cfg(feature = "shots")]
+mod shots;
 mod ui;
 #[cfg(feature = "slint-ui")]
 mod ui_slint;
@@ -260,6 +262,15 @@ fn run() -> anyhow::Result<()> {
     loop {
         let frame_start = Instant::now();
         let mut manual = ui.frame();
+        // A screenshot was requested: show the page it asks for (the search below fills it in)
+        #[cfg(feature = "shots")]
+        let shot_asked = match server.as_ref().and_then(PlaceServer::take_shot) {
+            Some(req) => {
+                ui.show_page(&req);
+                true
+            }
+            None => false,
+        };
         // A city typed on the on-screen keyboard: search it (the screen says so meanwhile)
         if let Some(query) = ui.take_search() {
             ui.set_search_results(&[], "SEARCHING...");
@@ -270,6 +281,12 @@ fn run() -> anyhow::Result<()> {
                     log::warn!("city search failed: {e}");
                     ui.set_search_results(&[], "SEARCH FAILED, CHECK WIFI");
                 }
+            }
+        }
+        #[cfg(feature = "shots")]
+        if shot_asked {
+            if let Some(s) = &server {
+                s.shot_done();
             }
         }
         // The list of saved places was changed on the web page or on the screen: keep it in flash

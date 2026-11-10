@@ -22,7 +22,7 @@ A multi-frontend weather station for ESP32 boards, powered by [Open-Meteo](https
 
 ## Screenshots
 
-Rendered on the host from the same code and fonts the firmware uses (`just screenshots`).
+The **P4 screenshots are taken from the real screen** (a firmware built with the `shots` feature streams the frame buffer: `just flash-p4-shots`, then `just screenshots-p4 <ip> slint`; `flash-p4-tui-shots` / `tui` for the terminal UI). The C6 and theme images are rendered on the host from the same code and fonts the firmware uses (`just screenshots`).
 
 | | Graphical (Slint) | Terminal (ratatui) |
 |---|---|---|

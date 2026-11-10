@@ -48,6 +48,7 @@ pub struct SlintUi {
     search: Rc<RefCell<Option<String>>>,
     found: Rc<RefCell<Vec<Location>>>,
     pick: Rc<RefCell<Option<PlaceChoice>>>,
+    query: Rc<RefCell<String>>,
     saved: Rc<RefCell<Vec<Place>>>,
     edit: Rc<RefCell<Option<SavedEdit>>>,
 }
@@ -161,6 +162,7 @@ impl SlintUi {
             search,
             found,
             pick,
+            query,
             saved,
             edit,
         })
@@ -294,5 +296,23 @@ impl Ui for SlintUi {
 
     fn take_saved_edit(&mut self) -> Option<SavedEdit> {
         self.edit.borrow_mut().take()
+    }
+
+    #[cfg(feature = "shots")]
+    fn show_page(&mut self, req: &weathertrack_core::screenshot::ShotRequest) {
+        if let Some(t) = req.tab {
+            self.app.set_tab(t as i32);
+        }
+        match &req.search {
+            Some(q) => {
+                self.app.set_searching(true);
+                *self.query.borrow_mut() = q.clone();
+                self.app.set_query(q.as_str().into());
+                *self.search.borrow_mut() = Some(q.clone());
+            }
+            None if req.tab.is_some() => self.app.set_searching(false),
+            None => {}
+        }
+        self.draw();
     }
 }
