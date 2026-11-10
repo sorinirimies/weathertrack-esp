@@ -1149,8 +1149,9 @@ dependencies = [
 
 [[package]]
 name = "mousefood"
-version = "0.5.0"
-source = "git+https://github.com/ratatui/mousefood#4857ce313f709bd17cb76011341556f001e9ba66"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2edaea8bf5374567e48028cc536369809b5055efb46d3449a5761b016b599f65"
 dependencies = [
  "embedded-graphics",
  "embedded-graphics-unicodefonts",
@@ -1987,7 +1988,6 @@ dependencies = [
 name = "weathertrack-tui"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "embedded-graphics",
  "embuild",
  "esp-idf-hal",
@@ -1996,11 +1996,27 @@ dependencies = [
  "mipidsi",
  "mousefood",
  "ratatui",
- "serde_json",
  "toml",
  "weathertrack-core",
  "weathertrack-hal",
+ "weathertrack-tui-ui",
+ "weathertrack-view",
  "ws2812-esp32-rmt-driver",
+]
+
+[[package]]
+name = "weathertrack-tui-ui"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "weathertrack-view",
+]
+
+[[package]]
+name = "weathertrack-view"
+version = "0.1.0"
+dependencies = [
+ "weathertrack-core",
 ]
 
 [[package]]

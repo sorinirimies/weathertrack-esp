@@ -2,15 +2,13 @@
 //! WeatherTrack TUI — entry point.
 //! Hardware init, splash, then Elm event loop.
 
-mod ui;
+mod splash;
 
 use weathertrack_core::app;
 use weathertrack_core::{FORECAST_DAYS, REFRESH_MS};
 use weathertrack_hal::{led, net, nvs, sd, wifi};
 
-use embedded_graphics::{
-    draw_target::DrawTarget, mono_font::ascii::FONT_10X20, pixelcolor::Rgb565, prelude::*,
-};
+use embedded_graphics::{draw_target::DrawTarget, pixelcolor::Rgb565, prelude::*};
 use esp_idf_hal::{
     delay::FreeRtos,
     gpio::{AnyIOPin, PinDriver},
@@ -28,8 +26,10 @@ use mipidsi::{
     options::{ColorInversion, ColorOrder, Orientation, Rotation},
     Builder,
 };
-use mousefood::prelude::*;
+use mousefood::{fonts, EmbeddedBackend, EmbeddedBackendConfig};
 use ratatui::Terminal;
+use weathertrack_tui_ui::{UiState, HOURS};
+use weathertrack_view::ViewModel;
 use ws2812_esp32_rmt_driver::driver::Ws2812Esp32RmtDriver;
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -96,24 +96,24 @@ fn main() {
         .unwrap();
 
     // ── Splash ──────────────────────────────────────────────────────
-    ui::splash::draw_init(&mut display);
-    ui::splash::draw_status(&mut display, 0, "Display OK", Rgb565::GREEN);
+    splash::draw_init(&mut display);
+    splash::draw_status(&mut display, 0, "Display OK", Rgb565::GREEN);
 
     // ── NVS config ──────────────────────────────────────────────────
-    ui::splash::draw_status(&mut display, 1, "Reading config...", Rgb565::WHITE);
+    splash::draw_status(&mut display, 1, "Reading config...", Rgb565::WHITE);
     let mut nvs_store = EspNvs::new(nvs_part.clone(), "wtrack", true).unwrap();
     let mut cfg = nvs::load_config(&nvs_store, &DEFAULTS);
     if !cfg.from_nvs {
         nvs::save_config(&mut nvs_store, &cfg);
-        ui::splash::draw_status(&mut display, 1, "Using defaults", Rgb565::YELLOW);
+        splash::draw_status(&mut display, 1, "Using defaults", Rgb565::YELLOW);
     } else {
-        ui::splash::draw_status(&mut display, 1, "Config OK", Rgb565::GREEN);
+        splash::draw_status(&mut display, 1, "Config OK", Rgb565::GREEN);
     }
 
     // ── Load cached weather (instant boot display) ──────────────────
     let mut model = app::Model::new(&cfg.location, cfg.lat, cfg.lon);
     if let Some(snapshot) = nvs::cache_load(&nvs_store) {
-        ui::splash::draw_status(&mut display, 2, "Cached weather loaded", Rgb565::GREEN);
+        splash::draw_status(&mut display, 2, "Cached weather loaded", Rgb565::GREEN);
         log::info!("Showing cached weather from {}", snapshot.timestamp);
         let cached_current = snapshot.to_current_weather();
         // Build a minimal forecast from cache
@@ -133,7 +133,7 @@ fn main() {
     // ── SD card check ───────────────────────────────────────────────
     let has_sd = sd::available();
     if has_sd {
-        ui::splash::draw_status(&mut display, 2, "SD card detected", Rgb565::GREEN);
+        splash::draw_status(&mut display, 2, "SD card detected", Rgb565::GREEN);
         // Try loading full forecast from SD
         if let Some(json) = sd::load_forecast() {
             if let Ok(f) = weathertrack_core::cache::deserialize_forecast(&json) {
@@ -144,10 +144,10 @@ fn main() {
     }
 
     // ── WiFi ────────────────────────────────────────────────────────
-    ui::splash::draw_status(&mut display, 2, "Connecting WiFi...", Rgb565::WHITE);
+    splash::draw_status(&mut display, 2, "Connecting WiFi...", Rgb565::WHITE);
     led::set_led(255, 165, 0, &mut led_drv);
     let _wifi = wifi::connect(p.modem, sys_loop, nvs_part, &cfg.ssid, &cfg.pass).unwrap();
-    ui::splash::draw_status(
+    splash::draw_status(
         &mut display,
         2,
         &format!("WiFi OK: {}", cfg.ssid),
@@ -157,7 +157,7 @@ fn main() {
     // ── Geolocation ─────────────────────────────────────────────────
     let is_default = (cfg.lat - DEFAULTS.lat).abs() < 0.01 && (cfg.lon - DEFAULTS.lon).abs() < 0.01;
     if !cfg.from_nvs || is_default {
-        ui::splash::draw_status(&mut display, 3, "Detecting location...", Rgb565::WHITE);
+        splash::draw_status(&mut display, 3, "Detecting location...", Rgb565::WHITE);
         if let Ok(loc) = net::fetch_ip_location() {
             cfg.lat = loc.latitude;
             cfg.lon = loc.longitude;
@@ -171,17 +171,17 @@ fn main() {
                     lon: loc.longitude,
                 },
             );
-            ui::splash::draw_status(
+            splash::draw_status(
                 &mut display,
                 3,
                 &format!("Loc: {}", cfg.location),
                 Rgb565::GREEN,
             );
         } else {
-            ui::splash::draw_status(&mut display, 3, "Using default location", Rgb565::YELLOW);
+            splash::draw_status(&mut display, 3, "Using default location", Rgb565::YELLOW);
         }
     } else {
-        ui::splash::draw_status(
+        splash::draw_status(
             &mut display,
             3,
             &format!("Loc: {}", cfg.location),
@@ -190,7 +190,7 @@ fn main() {
     }
 
     // ── Initial weather fetch ───────────────────────────────────────
-    ui::splash::draw_status(&mut display, 4, "Fetching weather...", Rgb565::WHITE);
+    splash::draw_status(&mut display, 4, "Fetching weather...", Rgb565::WHITE);
     led::set_led(0, 0, 255, &mut led_drv);
 
     match net::fetch_weather(cfg.lat, cfg.lon, FORECAST_DAYS) {
@@ -208,12 +208,12 @@ fn main() {
                 }
             }
             app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
-            ui::splash::draw_status(&mut display, 4, "Weather OK", Rgb565::GREEN);
+            splash::draw_status(&mut display, 4, "Weather OK", Rgb565::GREEN);
             led::set_led(0, 255, 0, &mut led_drv);
         }
         Err(e) => {
             app::update(&mut model, app::Msg::WeatherError(e.to_string()));
-            ui::splash::draw_status(
+            splash::draw_status(
                 &mut display,
                 4,
                 "Weather FAILED (using cache)",
@@ -230,7 +230,9 @@ fn main() {
     let backend = EmbeddedBackend::new(
         &mut display,
         EmbeddedBackendConfig {
-            font_regular: FONT_10X20,
+            // 6x10 Unicode font: 53x17 cells on the 320x172 LCD (box drawing and blocks included).
+            font_regular: fonts::MONO_6X10,
+            font_bold: None,
             ..EmbeddedBackendConfig::default()
         },
     );
@@ -241,24 +243,35 @@ fn main() {
     let mut btn_prev = false;
     let mut ticks: u32 = 0;
     let mut last_fetch: u32 = 0;
+    let mut ui_state = UiState {
+        offline: model.error.is_some(),
+        ..UiState::default()
+    };
+    let mut view = ViewModel::from_model(&model, HOURS);
+    let mut redraw = true;
 
     loop {
-        // Input
+        // Input: the BOOT button flips to the next page
         let btn = button.is_low();
         if btn && !btn_prev {
-            app::update(&mut model, app::Msg::NextPage);
+            ui_state.next_tab();
+            redraw = true;
         }
         btn_prev = btn;
 
         // Render
-        if model.dirty {
-            term.draw(|f| ui::view(f, &model)).unwrap();
-            model.dirty = false;
+        if redraw {
+            term.draw(|f| weathertrack_tui_ui::draw(f, &view, &ui_state))
+                .unwrap();
+            redraw = false;
         }
 
         // Auto-refresh
         if ticks.wrapping_sub(last_fetch) >= REFRESH_MS {
             led::set_led(0, 0, 255, &mut led_drv);
+            ui_state.refreshing = true;
+            term.draw(|f| weathertrack_tui_ui::draw(f, &view, &ui_state))
+                .unwrap();
             match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
                 Ok(f) => {
                     // Update cache
@@ -275,13 +288,18 @@ fn main() {
                         }
                     }
                     app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
+                    ui_state.offline = false;
                     led::set_led(0, 255, 0, &mut led_drv);
                 }
                 Err(e) => {
                     app::update(&mut model, app::Msg::WeatherError(e.to_string()));
+                    ui_state.offline = true;
                     led::set_led(255, 165, 0, &mut led_drv);
                 }
             }
+            ui_state.refreshing = false;
+            view = ViewModel::from_model(&model, HOURS);
+            redraw = true;
             last_fetch = ticks;
         }
 

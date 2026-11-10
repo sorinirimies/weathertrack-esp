@@ -21,6 +21,8 @@ opt-level = "z"
 [dependencies]
 weathertrack-core = { path = "../weathertrack-core", default-features = false }
 weathertrack-hal = { path = "../weathertrack-hal" }
+weathertrack-view = { path = "../weathertrack-view" }
+weathertrack-tui-ui = { path = "../weathertrack-tui-ui" }
 log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["experimental"] }
 esp-idf-hal = "0.45.2"
@@ -30,7 +32,7 @@ mipidsi = "0.9.0"
 
 # Ratatui + mousefood for embedded TUI
 ratatui = { version = "0.30", default-features = false }
-mousefood = { git = "https://github.com/ratatui/mousefood", default-features = false, features = ["fonts"] }
+mousefood = { version = "0.5", default-features = false, features = ["fonts"] }
 
 [build-dependencies]
 embuild = "0.33"
