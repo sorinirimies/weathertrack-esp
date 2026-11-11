@@ -399,9 +399,9 @@ dependencies = [
 
 [[package]]
 name = "tui-chart"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d76436d2db464669aefc06a01952af7e3b78049867419852bbc399d72f311fca"
+checksum = "baf142f70c58d539c5e870acdbd4436cd7ee2cc6f746598b108c85ad0b6836bd"
 dependencies = [
  "ratatui",
  "tui-nuances",
