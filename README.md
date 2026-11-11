@@ -20,6 +20,40 @@ A multi-frontend weather station for ESP32 boards, powered by [Open-Meteo](https
 - **Two UI styles per board**, same data and look: a graphical Slint UI and a terminal (ratatui) UI, on the C6's 320×172 LCD and the P4's 1024×600 touch panel
 - **ESP32-P4 7" touch app** (`weathertrack-p4`): five touch tabs — today, 24-hour temperature chart, 7-day forecast, details (sun arc, wind, UV, pressure) and alerts; WiFi through the board's ESP32-C6 coprocessor
 
+## Showcase
+
+The ESP32-P4 7" touch app on its **real screen** (1024×600, captured from the running board, see [Screenshots](#screenshots)), in both UI styles.
+
+### Graphical (Slint)
+
+| **Today** | **Hourly** | **7 days** |
+|---|---|---|
+| ![slint Today](docs/screenshots/p4-slint-today.png) | ![slint Hourly](docs/screenshots/p4-slint-hourly.png) | ![slint 7 days](docs/screenshots/p4-slint-week.png) |
+
+| **Details** | **Place, my places** | **Place, search** |
+|---|---|---|
+| ![slint Details](docs/screenshots/p4-slint-details.png) | ![slint Place, my places](docs/screenshots/p4-slint-place-list.png) | ![slint Place, search](docs/screenshots/p4-slint-place-search.png) |
+
+| **Alerts** |  |  |
+|---|---|---|
+| ![slint Alerts](docs/screenshots/p4-slint-alerts.png) |  |  |
+
+### Terminal (ratatui, drawn with [mousefood](https://github.com/ratatui/mousefood))
+
+| **Today** | **Hourly** | **7 days** |
+|---|---|---|
+| ![tui Today](docs/screenshots/p4-tui-today.png) | ![tui Hourly](docs/screenshots/p4-tui-hourly.png) | ![tui 7 days](docs/screenshots/p4-tui-week.png) |
+
+| **Details** | **Place, my places** | **Place, search** |
+|---|---|---|
+| ![tui Details](docs/screenshots/p4-tui-details.png) | ![tui Place, my places](docs/screenshots/p4-tui-place-list.png) | ![tui Place, search](docs/screenshots/p4-tui-place-search.png) |
+
+| **Alerts** |  |  |
+|---|---|---|
+| ![tui Alerts](docs/screenshots/p4-tui-alerts.png) |  |  |
+
+Every page is touch-first: the tab bar and the buttons are finger-sized, the Place tab has a keyboard, your saved places and a one-tap switch.
+
 ## Screenshots
 
 The **P4 screenshots are taken from the real screen** (a firmware built with the `shots` feature streams the frame buffer: `just flash-p4-shots`, then `just screenshots-p4 <ip> slint`; `flash-p4-tui-shots` / `tui` for the terminal UI). The C6 and theme images are rendered on the host from the same code and fonts the firmware uses (`just screenshots`).
