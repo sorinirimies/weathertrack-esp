@@ -18,6 +18,11 @@ opt-level = 3
 debug = true
 opt-level = "z"
 
+[features]
+default = ["mqtt"]
+# Publish the weather to an MQTT broker (config.toml [mqtt]) and show the connection on a page.
+mqtt = ["weathertrack-hal/mqtt"]
+
 [dependencies]
 weathertrack-core = { path = "../weathertrack-core", default-features = false }
 weathertrack-view = { path = "../weathertrack-view" }

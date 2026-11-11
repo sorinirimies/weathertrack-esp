@@ -5,6 +5,7 @@
 mod bridge_config;
 #[path = "../../weathertrack-view/slint/bridge.rs"]
 mod bridge;
+mod mqtt_glue;
 mod platform;
 
 use weathertrack_core::app;
@@ -47,6 +48,17 @@ fn heap_note(what: &str) {
     log::info!("heap {what}: free {free}, largest block {largest}");
 }
 
+/// The largest block the allocator can still hand out.
+fn largest_free_block() -> usize {
+    // SAFETY: plain ESP-IDF heap statistics getter.
+    unsafe { esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT) }
+}
+
+/// A refresh (HTTPS, JSON, then redrawing the 58 KB chart) needs a contiguous block this big. Without PSRAM
+/// the heap fragments a little more with every refresh; below this the fetch would abort midway,
+/// so the firmware restarts cleanly first (the place and the saved places are in flash).
+const MIN_FETCH_BLOCK: usize = 60_000;
+
 /// Give the web dashboard the latest weather.
 fn publish(server: &Option<PlaceServer>, model: &app::Model) {
     if let Some(s) = server {
@@ -54,10 +66,25 @@ fn publish(server: &Option<PlaceServer>, model: &app::Model) {
     }
 }
 
-/// Eight big pages (now, hours, chart, week, wind + humidity, UV + pressure, sun + rain, your
-/// place), plus alerts while there are any.
-fn page_count(model: &app::Model) -> i32 {
-    8 + i32::from(!model.alerts.is_empty())
+/// The pages that exist, as ids: eight big ones (0 now, 1 hours, 2 chart, 3 week, 4 wind + humidity,
+/// 5 UV + pressure, 6 sun + rain, 7 your place), 8 MQTT when a broker is configured, and 9 alerts
+/// while there are any.
+fn page_ids(model: &app::Model, mqtt: bool) -> Vec<i32> {
+    let mut ids: Vec<i32> = (0..8).collect();
+    if mqtt {
+        ids.push(8);
+    }
+    if !model.alerts.is_empty() {
+        ids.push(9);
+    }
+    ids
+}
+
+/// Show the page at position `idx` of `ids` (and tell the dots how many there are).
+fn show_page(app: &WeatherApp, ids: &[i32], idx: usize) {
+    app.set_page_count(i32::try_from(ids.len()).unwrap_or(8));
+    app.set_page_index(i32::try_from(idx).unwrap_or(0));
+    app.set_page(ids.get(idx).copied().unwrap_or(0));
 }
 
 const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -225,10 +252,15 @@ fn main() {
     bridge::sync_all(&slint_app, &model);
     publish(&server, &model);
     heap_note("after sync");
+    // MQTT (when config.toml has a [mqtt] host). Started only now: the first render needs the big
+    // contiguous blocks of the heap, and the C6 has no PSRAM.
+    let mut mqtt = mqtt_glue::Glue::start(_wifi.wifi().sta_netif().get_mac().ok());
+    mqtt.publish_weather(&model);
+    heap_note("after mqtt start");
     slint_app.set_offline(offline);
-    let mut page: i32 = 0;
-    slint_app.set_page_count(page_count(&model));
-    slint_app.set_page(page);
+    let mut page: usize = 0;
+    let mut ids = page_ids(&model, mqtt.enabled());
+    show_page(&slint_app, &ids, page);
     slint_app.set_loading(false);
     window.request_redraw();
     platform::render(&window, &mut display);
@@ -267,11 +299,17 @@ fn main() {
             last_fetch = ticks.wrapping_sub(REFRESH_MS); // fetch the new place right away
         }
 
+        // MQTT: keep the page current; a `refresh` command fetches the weather now
+        if mqtt.update(&slint_app, ticks) == Some(weathertrack_core::mqtt::Command::Refresh) {
+            last_fetch = ticks.wrapping_sub(REFRESH_MS);
+        }
+
         let btn = button.is_low();
         if btn && !btn_prev {
             // BOOT flips to the next page (the alerts page only exists while there are alerts)
-            page = (page + 1) % page_count(&model);
-            slint_app.set_page(page);
+            ids = page_ids(&model, mqtt.enabled());
+            page = (page + 1) % ids.len();
+            show_page(&slint_app, &ids, page);
         }
         btn_prev = btn;
 
@@ -283,16 +321,26 @@ fn main() {
             slint_app.set_refreshing(true);
             window.request_redraw();
             platform::render(&window, &mut display);
-            match net::fetch_weather(model.lat, model.lon, FORECAST_DAYS) {
+            mqtt.pause(); // the HTTPS request needs the memory the MQTT connection holds
+            heap_note("before fetch");
+            if largest_free_block() < MIN_FETCH_BLOCK {
+                log::warn!("heap too fragmented for a fetch (largest block {}), restarting", largest_free_block());
+                FreeRtos::delay_ms(200);
+                // SAFETY: a clean software reset; nothing is left half-written (flash writes are atomic NVS commits).
+                unsafe { esp_idf_svc::sys::esp_restart() };
+            }
+            let fetched = net::fetch_weather(model.lat, model.lon, FORECAST_DAYS);
+            mqtt.resume();
+            match fetched {
                 Ok(f) => {
                     app::update(&mut model, app::Msg::WeatherLoaded(Box::new(f)));
                     bridge::sync_all(&slint_app, &model);
     publish(&server, &model);
                     offline = false;
-                    let count = page_count(&model);
-                    slint_app.set_page_count(count);
-                    page = page.min(count - 1);
-                    slint_app.set_page(page);
+                    ids = page_ids(&model, mqtt.enabled());
+                    page = page.min(ids.len() - 1);
+                    show_page(&slint_app, &ids, page);
+                    mqtt.publish_weather(&model);
                     led::set_led(0, 255, 0, &mut led_drv);
                 }
                 Err(e) => {

@@ -1,2 +1,17 @@
 // Data types shared with the P4 UI (see weathertrack-view/slint).
 export * from "../../weathertrack-view/slint/types.slint";
+
+// The MQTT connection as the MQTT page shows it (set from `src/mqtt_glue.rs`).
+export struct MqttData {
+    // 0 off, 1 connecting, 2 connected, 3 failed
+    state: int,
+    state-text: string,
+    broker: string,
+    sent: int,
+    received: int,
+    last-sent: string,
+    last-received: string,
+    connects: int,
+    // true for a moment after every message, so the dot flashes
+    pulse: bool,
+}

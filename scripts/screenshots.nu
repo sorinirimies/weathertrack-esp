@@ -14,6 +14,8 @@ export const SHOTS = [
     ["tui-ui/c6-4-wind.png" "c6-tui-wind.png"]
     ["tui-ui/c6-3-week.png" "c6-tui-week.png"]
     ["gui-ui/8-place.png" "c6-slint-place.png"]
+    ["gui-ui/9-mqtt-activity.png" "c6-slint-mqtt.png"]
+    ["gui-ui/9-mqtt-offline.png" "c6-slint-mqtt-offline.png"]
     ["tui-ui/c6-7-place.png" "c6-tui-place.png"]
     ["tui-ui/themes/p4-today-nord.png" "p4-tui-nord.png"]
     ["tui-ui/themes/c6-today-catppuccin-latte.png" "c6-tui-latte.png"]

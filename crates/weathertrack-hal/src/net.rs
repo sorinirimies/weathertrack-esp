@@ -35,8 +35,25 @@ pub fn fetch_weather(lat: f64, lon: f64, days: u8) -> anyhow::Result<Forecast> {
     let url = build_forecast_url(lat, lon, days);
     log::info!("Fetching weather...");
     let body = http_get(&url)?;
+    log::info!("weather: body {} bytes, {}", body.len(), heap_text());
     let json: serde_json::Value = serde_json::from_slice(&body)?;
-    parse_forecast(&json)
+    log::info!("weather: parsed to a value tree, {}", heap_text());
+    drop(body);
+    let forecast = parse_forecast(&json);
+    log::info!("weather: forecast built, {}", heap_text());
+    forecast
+}
+
+/// Free heap and largest block for the log (the C6 has no PSRAM).
+fn heap_text() -> String {
+    // SAFETY: plain ESP-IDF heap statistics getters.
+    let (free, largest) = unsafe {
+        (
+            esp_idf_svc::sys::esp_get_free_heap_size(),
+            esp_idf_svc::sys::heap_caps_get_largest_free_block(esp_idf_svc::sys::MALLOC_CAP_8BIT),
+        )
+    };
+    format!("heap free {free}, largest block {largest}")
 }
 
 pub fn fetch_ip_location() -> anyhow::Result<Location> {

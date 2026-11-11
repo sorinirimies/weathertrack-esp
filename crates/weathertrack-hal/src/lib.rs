@@ -2,6 +2,8 @@
 //! Shared between TUI and GUI crates.
 
 pub mod led;
+#[cfg(feature = "mqtt")]
+pub mod mqtt;
 pub mod net;
 pub mod nvs;
 pub mod place;

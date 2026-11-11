@@ -1,0 +1,94 @@
+import { Theme } from "../theme.slint";
+import { MqttData } from "../types.slint";
+import { Card, Caption } from "../card.slint";
+
+// Content area: 320 x 134. The connection to the MQTT broker: state, traffic, the last messages.
+export component MqttPage inherits Rectangle {
+    in property <MqttData> mqtt;
+
+    property <color> state-color: mqtt.state == 2 ? Theme.good : mqtt.state == 3 ? Theme.warm : mqtt.state == 1 ? Theme.accent : Theme.faint;
+
+    Card {
+        x: 6px;
+        y: 2px;
+        width: 308px;
+        height: 132px;
+
+        // the activity dot: flashes with every message
+        Rectangle {
+            x: 12px;
+            y: 12px;
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            background: mqtt.pulse ? Theme.text : root.state-color;
+            border-width: 2px;
+            border-color: root.state-color;
+            animate background { duration: 120ms; }
+        }
+        Text {
+            x: 36px;
+            y: 6px;
+            width: parent.width - 48px;
+            text: mqtt.state-text;
+            font-family: Theme.font;
+            font-size: 22px;
+            font-weight: 700;
+            color: root.state-color;
+            overflow: elide;
+        }
+        Text {
+            x: 12px;
+            y: 34px;
+            width: parent.width - 24px;
+            text: "BROKER  " + mqtt.broker + (mqtt.connects > 1 ? "  ·  " + mqtt.connects + " connects" : "");
+            font-family: Theme.font;
+            font-size: 12px;
+            color: Theme.muted;
+            overflow: elide;
+        }
+        Rectangle { x: 12px; y: 52px; width: parent.width - 24px; height: 1px; background: Theme.card-border; }
+
+        Caption { x: 12px; y: 56px; text: "SENT"; }
+        Text {
+            x: 12px;
+            y: 66px;
+            text: mqtt.sent;
+            font-family: Theme.font;
+            font-size: 28px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+        Caption { x: 120px; y: 56px; text: "RECEIVED"; }
+        Text {
+            x: 120px;
+            y: 66px;
+            text: mqtt.received;
+            font-family: Theme.font;
+            font-size: 28px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+
+        Text {
+            x: 12px;
+            y: 100px;
+            width: parent.width - 24px;
+            text: "OUT  " + (mqtt.last-sent == "" ? "-" : mqtt.last-sent);
+            font-family: Theme.font;
+            font-size: 11px;
+            color: Theme.muted;
+            overflow: elide;
+        }
+        Text {
+            x: 12px;
+            y: 112px;
+            width: parent.width - 24px;
+            text: "IN   " + (mqtt.last-received == "" ? "-" : mqtt.last-received);
+            font-family: Theme.font;
+            font-size: 11px;
+            color: Theme.accent;
+            overflow: elide;
+        }
+    }
+}

@@ -4590,6 +4590,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "stem-mqtt-proto"
+version = "0.8.1"
+dependencies = [
+ "bytes",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "stem-mqtt-sync"
+version = "0.8.1"
+dependencies = [
+ "bytes",
+ "stem-mqtt-proto",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "strict-num"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5399,6 +5416,7 @@ dependencies = [
  "esp-idf-svc",
  "log",
  "serde_json",
+ "stem-mqtt-sync",
  "weathertrack-core",
  "weathertrack-view",
  "ws2812-esp32-rmt-driver",

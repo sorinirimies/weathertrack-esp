@@ -70,14 +70,56 @@ fn main() {
     );
     app.set_loading(false);
     app.set_offline(std::env::var("OFFLINE").is_ok());
-    app.set_page_count(9);
+    app.set_page_count(10);
     for (i, n) in [
-        "1-now", "2-hours", "3-chart", "4-week", "5-wind", "6-uv", "7-sun", "8-place", "9-alerts",
+        "1-now", "2-hours", "3-chart", "4-week", "5-wind", "6-uv", "7-sun", "8-place", "9-mqtt",
+        "10-alerts",
     ]
     .iter()
     .enumerate()
     {
+        // ids 0..=7 are the weather pages, 8 is MQTT and 9 is alerts (see page_ids in the firmware)
         app.set_page(i as i32);
+        app.set_page_index(i as i32);
+        if *n == "9-mqtt" {
+            app.set_mqtt(MqttData {
+                state: 2,
+                state_text: "Connected".into(),
+                broker: "192.168.1.23:1883".into(),
+                sent: 12,
+                received: 3,
+                last_sent: "weather: {\"place\":\"Stuttgart\",\"temperature\":8.4}".into(),
+                last_received: "command: refresh".into(),
+                connects: 1,
+                pulse: false,
+            });
+        }
         shot(n);
     }
+
+    // The MQTT page in its other states
+    app.set_page(8);
+    app.set_page_index(8);
+    let base = MqttData {
+        state: 2,
+        state_text: "Connected".into(),
+        broker: "192.168.1.23:1883".into(),
+        sent: 12,
+        received: 3,
+        last_sent: "weather: {\"place\":\"Stuttgart\",\"temperature\":8.4}".into(),
+        last_received: "command: refresh".into(),
+        connects: 2,
+        pulse: true,
+    };
+    app.set_mqtt(base.clone());
+    shot("9-mqtt-activity");
+    app.set_mqtt(MqttData { state: 1, state_text: "Connecting".into(), pulse: false, ..base.clone() });
+    shot("9-mqtt-connecting");
+    app.set_mqtt(MqttData {
+        state: 3,
+        state_text: "Offline: connection timed out".into(),
+        pulse: false,
+        ..base
+    });
+    shot("9-mqtt-offline");
 }

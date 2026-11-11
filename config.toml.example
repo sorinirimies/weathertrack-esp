@@ -16,3 +16,11 @@ longitude = 23.60
 name = "Cluj-Napoca"
 # Set to true to always use the place above and skip the lookup.
 fixed = false
+
+# Optional: publish the weather to an MQTT broker and take commands ("refresh", "status") on
+# weathertrack/<id>/command. Adds an MQTT page on the C6 screen. Leave the table out to turn it off.
+# [mqtt]
+# host = "192.168.1.10"
+# port = 1883
+# username = "weather"    # optional
+# password = "secret"     # optional

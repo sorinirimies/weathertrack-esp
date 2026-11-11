@@ -31,6 +31,17 @@ fn main() {
                 println!("cargo:rustc-env=LOCATION_FIXED=true");
             }
         }
+        // `[mqtt] host = "192.168.1.23"` turns on the MQTT page and the connection.
+        if let Some(mqtt) = config.get("mqtt") {
+            for (key, var) in [("host", "MQTT_HOST"), ("username", "MQTT_USER"), ("password", "MQTT_PASS")] {
+                if let Some(v) = mqtt.get(key).and_then(|v| v.as_str()) {
+                    println!("cargo:rustc-env={var}={v}");
+                }
+            }
+            if let Some(port) = mqtt.get("port").and_then(|v| v.as_integer()) {
+                println!("cargo:rustc-env=MQTT_PORT={port}");
+            }
+        }
         println!("cargo:rerun-if-changed={}", config_path.display());
     } else {
         println!("cargo:warning=config.toml not found — using defaults. Copy config.toml.example to config.toml");

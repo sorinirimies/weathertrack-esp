@@ -149,6 +149,40 @@ How the sync works (every 30 s, and right after you choose): the web app reads e
 
 Settings (devices, chosen place, sync) are kept in the user's config directory (`weathertrack/web.json`). It listens on `127.0.0.1:3030` only by default and has no login, so keep it that way unless you trust your network. It needs Rust 1.98 (Topcoat), so it is its own workspace: the gate checks it and `cargo deny` / `cargo audit` cover it, but the 1.90 MSRV job does not build it.
 
+### MQTT (optional, C6 and P4 web app aside)
+
+The C6 can publish its weather to an MQTT broker and take commands, and it has an **MQTT page** that shows the connection live: state (a dot that flashes with every message), the broker, messages sent and received, and the last message each way.
+
+| Connected, a message just passed | Broker unreachable |
+|---|---|
+| ![MQTT page](docs/screenshots/c6-slint-mqtt.png) | ![MQTT page offline](docs/screenshots/c6-slint-mqtt-offline.png) |
+
+Turn it on in `config.toml` (the table is optional; without it there is no MQTT and no page):
+
+```toml
+[mqtt]
+host = "192.168.1.23"   # your broker
+port = 1883
+# username = "weather"  # optional
+# password = "secret"
+```
+
+| Topic (`<id>` is `c6-` and the last two bytes of the MAC) | | |
+|---|---|---|
+| `weathertrack/<id>/status` | published, retained | `online`; `offline` is the will, sent if the connection drops |
+| `weathertrack/<id>/weather` | published, retained | JSON: place, temperature, feels_like, humidity, pressure, wind_kmh, condition, updated |
+| `weathertrack/<id>/command` | subscribed | `refresh` (fetch the weather now) or `status` (publish again) |
+
+It uses the blocking client from [`stem-mqtt-sync`](https://github.com/sorinirimies/stem-mqtt) (built on `stem-mqtt-proto`) and talks to any broker, for example the [`stem-mqtt-broker`](https://github.com/sorinirimies/stem-mqtt):
+
+```
+docker run -d --name stem-broker -p 1883:1883 -v $PWD/mqtt-broker:/usr/local/bin/mqtt-broker:ro ubuntu:24.04 mqtt-broker --allow-anonymous
+cargo run -p stem-mqtt-sync --example mqtt -- sub 192.168.1.23:1883 'weathertrack/#'       # watch
+cargo run -p stem-mqtt-sync --example mqtt -- pub 192.168.1.23:1883 weathertrack/c6-fd3c/command refresh
+```
+
+Memory notes (the C6 has no PSRAM): the MQTT client runs in the main loop, not in a thread, and disconnects cleanly around the HTTPS weather fetch. The fetch asks for 48 hours of hourly data instead of 168 (the JSON becomes a ~110 KB value tree while parsing otherwise), the chart image is drawn straight into its final buffer, and if the heap has fragmented too much for a refresh the firmware restarts cleanly instead of aborting midway (the place and the saved places are in flash, MQTT reconnects, the retained status stays `online`).
+
 ### Themes
 
 The terminal UI is themed with [tui-nuances](https://github.com/sorinirimies/tui-nuances): WeatherTrack (the default), Catppuccin, Tokyo Night, Nord, Dracula, Gruvbox, Solarized (dark and light), One Dark, Rosé Pine, Monokai, Kanagawa, Everforest, Night Owl, Synthwave, Pip-Boy, Porsche, High contrast, GitHub Light. Text, borders and chart colours are contrast-checked against each theme's background, so light themes stay readable.
