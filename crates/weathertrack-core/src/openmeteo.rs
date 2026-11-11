@@ -22,11 +22,23 @@ pub fn build_current_url(lat: f64, lon: f64) -> String {
     )
 }
 
+/// Hours of hourly data to ask for. Every screen shows at most 24, and the C6 (no PSRAM) cannot
+/// afford the 168 of a full week: that JSON becomes a ~110 KB value tree while parsing, a fetch
+/// after the first render ran out of memory. Daily data still covers the full `days`.
+pub const FORECAST_HOURS: u16 = 48;
+
 /// Build the URL for fetching a full forecast (current + hourly + daily).
 pub fn build_forecast_url(lat: f64, lon: f64, days: u8) -> String {
     format!(
-        "{}/forecast?latitude={}&longitude={}&current={}&hourly={}&daily={}&timezone=auto&forecast_days={}",
-        OPENMETEO_BASE_URL, lat, lon, CURRENT_PARAMS, HOURLY_PARAMS, DAILY_PARAMS, days
+        "{}/forecast?latitude={}&longitude={}&current={}&hourly={}&daily={}&timezone=auto&forecast_days={}&forecast_hours={}",
+        OPENMETEO_BASE_URL,
+        lat,
+        lon,
+        CURRENT_PARAMS,
+        HOURLY_PARAMS,
+        DAILY_PARAMS,
+        days,
+        FORECAST_HOURS
     )
 }
 
@@ -208,6 +220,10 @@ mod tests {
     fn test_build_forecast_url() {
         let url = build_forecast_url(46.77, 23.60, 7);
         assert!(url.contains("forecast_days=7"));
+        assert!(
+            url.contains("forecast_hours=48"),
+            "hourly data is limited so that the C6 can parse it"
+        );
         assert!(url.contains("hourly="));
         assert!(url.contains("daily="));
     }

@@ -13,10 +13,12 @@ use weathertrack_view::{AlertView, CurrentView, DayView, HourView, ViewModel};
 
 use crate::bridge_config::{ARC_H, ARC_W, CHART_H, CHART_W, HOURS};
 
-fn image(rgba: &[u8], w: u32, h: u32) -> Image {
-    Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
-        rgba, w, h,
-    ))
+/// An image drawn straight into its final pixel buffer: no second copy, which matters on the C6
+/// (no PSRAM: three 58 KB chart buffers alive at once did not fit).
+fn image_with(w: u32, h: u32, draw: impl FnOnce(&mut [u8])) -> Image {
+    let mut pixels = SharedPixelBuffer::<Rgba8Pixel>::new(w, h);
+    draw(pixels.make_mut_bytes());
+    Image::from_rgba8(pixels)
 }
 
 fn current_data(location: &str, c: &CurrentView) -> CurrentData {
@@ -116,13 +118,16 @@ pub fn sync_all(app: &WeatherApp, model: &Model) {
         .map(|(h, &(x, _))| hour_data(h, (x, chart::curve_y(&samples, x))))
         .collect();
     app.set_hours(ModelRc::new(VecModel::from(hours)));
-    let rgba = chart::curve_rgba(&pts, CHART_W as u32, CHART_H as u32, CurveStyle::default());
-    app.set_hourly_chart(image(&rgba, CHART_W as u32, CHART_H as u32));
-    app.set_sun_arc(image(
-        &chart::arc_rgba(ARC_W, ARC_H, (86, 112, 168), 3.0),
-        ARC_W,
-        ARC_H,
-    ));
+    // Let go of the previous images before drawing the new ones, so the old and the new chart are
+    // never alive together.
+    app.set_hourly_chart(Image::default());
+    app.set_sun_arc(Image::default());
+    app.set_hourly_chart(image_with(CHART_W as u32, CHART_H as u32, |b| {
+        chart::curve_into(b, &pts, CHART_W as u32, CHART_H as u32, CurveStyle::default());
+    }));
+    app.set_sun_arc(image_with(ARC_W, ARC_H, |b| {
+        chart::arc_into(b, ARC_W, ARC_H, (86, 112, 168), 3.0);
+    }));
 
     app.set_days(ModelRc::new(VecModel::from(
         vm.days.iter().map(day_data).collect::<Vec<_>>(),

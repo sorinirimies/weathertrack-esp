@@ -9,6 +9,7 @@ pub mod app;
 pub mod cache;
 pub mod geocode;
 pub mod location;
+pub mod mqtt;
 pub mod openmeteo;
 pub mod place;
 pub mod saved;
