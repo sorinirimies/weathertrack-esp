@@ -16,13 +16,13 @@ ws2812-esp32-rmt-driver = "0.13.0"
 serde_json = "1"
 anyhow = "1"
 # The blocking MQTT client (feature `mqtt`); a sibling checkout until it is on crates.io.
-stem-mqtt-sync = { path = "../../../stem-mqtt/crates/mqtt-sync", optional = true }
+stem-mqtt-client-blocking = { path = "../../../stem-mqtt/crates/mqtt-client-blocking", optional = true }
 
 [features]
 default = []
 # Publish the weather to an MQTT broker and take commands (see `mqtt.rs`).
-mqtt = ["dep:stem-mqtt-sync"]
+mqtt = ["dep:stem-mqtt-client-blocking"]
 
-# cargo machete matches package names, and `use mqtt_sync::...` is the library name of stem-mqtt-sync.
+# cargo machete matches package names, and `use mqtt_client_blocking::...` is the library name of stem-mqtt-client-blocking.
 [package.metadata.cargo-machete]
-ignored = ["stem-mqtt-sync"]
+ignored = ["stem-mqtt-client-blocking"]

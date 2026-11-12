@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-use mqtt_sync::{Client, Error, Options, QoS, WillMessage};
+use mqtt_client_blocking::{Client, Error, Options, QoS, WillMessage};
 use weathertrack_core::mqtt::{parse_command, Activity, Command, Link, MqttConfig, Topics, OFFLINE, ONLINE};
 
 /// First pause before reconnecting; it doubles up to [`MAX_BACKOFF`].

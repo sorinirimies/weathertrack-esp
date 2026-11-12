@@ -173,12 +173,12 @@ port = 1883
 | `weathertrack/<id>/weather` | published, retained | JSON: place, temperature, feels_like, humidity, pressure, wind_kmh, condition, updated |
 | `weathertrack/<id>/command` | subscribed | `refresh` (fetch the weather now) or `status` (publish again) |
 
-It uses the blocking client from [`stem-mqtt-sync`](https://github.com/sorinirimies/stem-mqtt) (built on `stem-mqtt-proto`) and talks to any broker, for example the [`stem-mqtt-broker`](https://github.com/sorinirimies/stem-mqtt):
+It uses the blocking client from [`stem-mqtt-client-blocking`](https://github.com/sorinirimies/stem-mqtt) (built on `stem-mqtt-proto`) and talks to any broker, for example the [`stem-mqtt-broker`](https://github.com/sorinirimies/stem-mqtt):
 
 ```
 docker run -d --name stem-broker -p 1883:1883 -v $PWD/mqtt-broker:/usr/local/bin/mqtt-broker:ro ubuntu:24.04 mqtt-broker --allow-anonymous
-cargo run -p stem-mqtt-sync --example mqtt -- sub 192.168.1.23:1883 'weathertrack/#'       # watch
-cargo run -p stem-mqtt-sync --example mqtt -- pub 192.168.1.23:1883 weathertrack/c6-fd3c/command refresh
+cargo run -p stem-mqtt-client-blocking --example mqtt -- sub 192.168.1.23:1883 'weathertrack/#'       # watch
+cargo run -p stem-mqtt-client-blocking --example mqtt -- pub 192.168.1.23:1883 weathertrack/c6-fd3c/command refresh
 ```
 
 Memory notes (the C6 has no PSRAM): the MQTT client runs in the main loop, not in a thread, and disconnects cleanly around the HTTPS weather fetch. The fetch asks for 48 hours of hourly data instead of 168 (the JSON becomes a ~110 KB value tree while parsing otherwise), the chart image is drawn straight into its final buffer, and if the heap has fragmented too much for a refresh the firmware restarts cleanly instead of aborting midway (the place and the saved places are in flash, MQTT reconnects, the retained status stays `online`).
