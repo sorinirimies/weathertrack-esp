@@ -53,6 +53,18 @@ export def p4_flash_args [bootloader: path, image: path, port: string]: nothing 
     [...$base ...$port_args $image]
 }
 
+# espflash arguments for the C6 (8 MB flash). `port` empty = let espflash pick; `monitor` opens the
+# serial monitor afterwards (it needs a terminal, so leave it off from scripts and agents).
+export def c6_flash_args [bootloader: path, image: path, port: string, monitor: bool]: nothing -> list<string> {
+    let base = [
+        "flash" "--chip" "esp32c6" "--flash-size" "8mb" "--partition-table" "partitions.csv"
+        "--bootloader" $bootloader
+    ]
+    let port_args = if ($port | is-empty) { [] } else { ["--port" $port] }
+    let monitor_args = if $monitor { ["--monitor"] } else { [] }
+    [...$base ...$port_args ...$monitor_args $image]
+}
+
 # Little-endian unsigned integer from `n` bytes at `at`.
 export def le [bytes: binary, at: int, n: int]: nothing -> int {
     $bytes | bytes at $at..<($at + $n) | into int --endian little
@@ -116,6 +128,18 @@ def "main flash-p4" [--port: string = ""] {
     if $bl == null { error make { msg: $"bootloader.bin not found under ($out)/build; run `just build-p4-release`" } }
     cd $dir
     ^espflash ...(p4_flash_args $bl ($out | path join weathertrack-p4) $port)
+}
+
+# Flash the release build of a C6 firmware (`gui` or `tui`): `just build-gui-release` first.
+def "main flash-c6" [ui: string, --port: string = "", --no-monitor] {
+    if $ui not-in [gui tui] { error make { msg: $"ui must be gui or tui, not ($ui)" } }
+    let crate = $"weathertrack-($ui)"
+    let dir = $ROOT | path join crates $crate
+    let out = $dir | path join target riscv32imac-esp-espidf release
+    let bl = newest_bootloader ($out | path join build)
+    if $bl == null { error make { msg: $"bootloader.bin not found under ($out)/build; run `just build-($ui)-release`" } }
+    cd $dir
+    ^espflash ...(c6_flash_args $bl ($out | path join $crate) $port (not $no_monitor))
 }
 
 # Parts of the flash worth keeping, read over USB (~10 KB/s, so no full dump): the partition

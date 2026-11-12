@@ -56,6 +56,14 @@ build-tui-release: gen-sdkconfig
 build-gui-release: gen-sdkconfig
     cd crates/weathertrack-gui; cargo build --release
 
+# Flash the GUI firmware (ESP32-C6, release) and open the serial monitor; port optional
+flash-gui port="": build-gui-release
+    nu scripts/esp.nu flash-c6 gui --port "{{ port }}"
+
+# Flash the TUI firmware (ESP32-C6, release) and open the serial monitor; port optional
+flash-tui port="": build-tui-release
+    nu scripts/esp.nu flash-c6 tui --port "{{ port }}"
+
 # Flash and monitor the TUI firmware (ESP32-C6)
 run-tui: gen-sdkconfig
     cd crates/weathertrack-tui; cargo run

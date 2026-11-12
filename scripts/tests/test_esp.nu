@@ -3,7 +3,7 @@
 
 use std/assert
 use runner.nu *
-use ../esp.nu [c6_sdkconfig p4_sdkconfig newest_bootloader p4_flash_args C6_CRATES parse_ptable image_size]
+use ../esp.nu [c6_sdkconfig p4_sdkconfig newest_bootloader p4_flash_args c6_flash_args C6_CRATES parse_ptable image_size]
 
 # One 32-byte partition entry.
 def pt_entry [name: string, type: int, offset: int, size: int]: nothing -> binary {
@@ -47,6 +47,17 @@ def "test esp: flash args add the port only when given" [] {
     let without = p4_flash_args /b.bin /app ""
     assert not ($without | any {|a| $a == "--port" })
     assert ($without | any {|a| $a == "esp32p4" })
+}
+
+def "test esp: c6 flash args: chip, flash size, port and monitor" [] {
+    let args = c6_flash_args /b.bin /app /dev/ttyACM0 false
+    assert ($args | any {|a| $a == "esp32c6" })
+    assert ($args | any {|a| $a == "8mb" })
+    assert equal ($args | last) "/app"
+    assert (($args | find --regex "^--port$" | length) == 1)
+    assert not ($args | any {|a| $a == "--monitor" }) "no monitor without a terminal"
+    assert ((c6_flash_args /b.bin /app "" true) | any {|a| $a == "--monitor" })
+    assert not ((c6_flash_args /b.bin /app "" true) | any {|a| $a == "--port" })
 }
 
 def "test esp: the c6 crates exist" [] {

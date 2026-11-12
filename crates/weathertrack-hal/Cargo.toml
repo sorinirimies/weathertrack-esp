@@ -15,8 +15,8 @@ esp-idf-hal = "0.45.2"
 ws2812-esp32-rmt-driver = "0.13.0"
 serde_json = "1"
 anyhow = "1"
-# The blocking MQTT client (feature `mqtt`); a sibling checkout until it is on crates.io.
-stem-mqtt-client-blocking = { path = "../../../stem-mqtt/crates/mqtt-client-blocking", optional = true }
+# The blocking MQTT client (feature `mqtt`), from crates.io.
+stem-mqtt-client-blocking = { version = "0.8.3", optional = true }
 
 [features]
 default = []
