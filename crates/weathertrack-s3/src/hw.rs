@@ -1,6 +1,6 @@
-//! Waveshare ESP32-S3-Touch-AMOLED-1.8 (368x448): CO5300 AMOLED over QSPI, FT3168 touch, TCA9554
-//! I/O expander (display reset). Pins and the init sequence follow the `sh8601-rs` crate's
-//! Waveshare example.
+//! Waveshare ESP32-S3-Touch-AMOLED-1.64 V2 (280x456): QSPI AMOLED (the CO5300 init, which Waveshare's firmware
+//! loads as `sh8601`), FT3168 touch on I2C 47/48 with its reset on GPIO8. Pins follow Waveshare's
+//! `ESP32-S3-Touch-AMOLED-1.64-v2` examples; chip select is 46 on V2 and 9 on V1, so both are driven.
 
 use anyhow::{anyhow, Result};
 use esp_idf_hal::{
