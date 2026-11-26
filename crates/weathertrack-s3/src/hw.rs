@@ -72,7 +72,7 @@ impl Display {
 
         // The PCB revisions use different chip selects (V1 GPIO9, V2 GPIO46): drive both.
         let mut devs = Vec::new();
-        for cs in [9] {
+        for cs in [9, 46] {
             let mut cfg: spi_device_interface_config_t = unsafe { core::mem::zeroed() };
             cfg.command_bits = 8;
             cfg.address_bits = 24;
