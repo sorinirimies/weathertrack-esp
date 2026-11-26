@@ -1,6 +1,6 @@
 //! # weathertrack-core
 //!
-//! Shared weather logic for the esp32-c6-weathertrack project.
+//! Shared weather logic for the weathertrack-esp project.
 //! Contains types, OpenMeteo API URL building, JSON parsing, and WMO code mappings.
 //!
 //! This crate is intentionally platform-agnostic — no UI, HTTP client, or ESP32 dependencies.

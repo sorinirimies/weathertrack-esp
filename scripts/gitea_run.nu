@@ -7,7 +7,7 @@
 # Usage: nu scripts/gitea_run.nu <workflow>     e.g. deps-update | security | fuzz
 # ──────────────────────────────────────────────────────────────────────────────
 
-export const REPO = "sorin/esp32-c6-weathertrack"
+export const REPO = "sorin/weathertrack-esp"
 
 export def dispatch_url [base: string, workflow: string] {
     let file = if ($workflow | str ends-with ".yml") { $workflow } else { $"($workflow).yml" }

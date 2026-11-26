@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Sorin Albu-Irimies"]
 license = "MIT"
-repository = "https://github.com/sorinirimies/esp32-c6-weathertrack"
+repository = "https://github.com/sorinirimies/weathertrack-esp"
 description = "WeatherTrack web app (Topcoat): weather for any place, and one place for all your ESP32 devices, kept in sync"
 publish = false
 # Topcoat 0.10 needs 1.98; the rest of the project builds with 1.90.

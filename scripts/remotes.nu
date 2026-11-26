@@ -14,8 +14,8 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 export const REMOTES = {
-    origin: "git@github.com:sorinirimies/esp32-c6-weathertrack.git"
-    gitea-starscream: "gitea@192.168.1.44:sorin/esp32-c6-weathertrack.git"
+    origin: "git@github.com:sorinirimies/weathertrack-esp.git"
+    gitea-starscream: "gitea@192.168.1.44:sorin/weathertrack-esp.git"
 }
 
 # The wanted remotes that are configured, in REMOTES order.

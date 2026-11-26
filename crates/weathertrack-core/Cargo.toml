@@ -8,7 +8,7 @@ rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
 publish = false
-description = "Shared weather logic for esp32-c6-weathertrack"
+description = "Shared weather logic for weathertrack-esp"
 
 [dependencies]
 serde = { workspace = true }

@@ -1,8 +1,8 @@
-# esp32-c6-weathertrack
+# weathertrack-esp
 
-[![CI](https://github.com/sorinirimies/esp32-c6-weathertrack/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/esp32-c6-weathertrack/actions/workflows/ci.yml)
-[![Security](https://github.com/sorinirimies/esp32-c6-weathertrack/actions/workflows/security.yml/badge.svg)](https://github.com/sorinirimies/esp32-c6-weathertrack/actions/workflows/security.yml)
-[![Fuzz](https://github.com/sorinirimies/esp32-c6-weathertrack/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/esp32-c6-weathertrack/actions/workflows/fuzz.yml)
+[![CI](https://github.com/sorinirimies/weathertrack-esp/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/weathertrack-esp/actions/workflows/ci.yml)
+[![Security](https://github.com/sorinirimies/weathertrack-esp/actions/workflows/security.yml/badge.svg)](https://github.com/sorinirimies/weathertrack-esp/actions/workflows/security.yml)
+[![Fuzz](https://github.com/sorinirimies/weathertrack-esp/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/weathertrack-esp/actions/workflows/fuzz.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A multi-frontend weather station for ESP32 boards, powered by [Open-Meteo](https://open-meteo.com/): the [Waveshare ESP32-C6-LCD-1.47](https://www.waveshare.com/wiki/ESP32-C6-LCD-1.47) (tiny 1.47" LCD) and the [Waveshare ESP32-P4-WIFI6-Touch-LCD-7B](https://docs.waveshare.com/ESP32-P4-WIFI6-Touch-LCD-7B) (7" 1024×600 touch screen). No cloud account or API key required.
@@ -260,8 +260,8 @@ The core crate has no ESP32 dependencies and is the only workspace member. The f
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/sorin-irimies/esp32-c6-weathertrack.git
-   cd esp32-c6-weathertrack
+   git clone https://github.com/sorinirimies/weathertrack-esp.git
+   cd weathertrack-esp
    ```
 
 2. Copy `config.toml.example` to `config.toml` (git-ignored) and set your WiFi. It is baked into the firmware at build time. **The weather follows where the device is**: on every boot its location is looked up from the network (IP geolocation, city level). The `[location]` place in `config.toml` is only the fallback if that lookup fails; set `fixed = true` there to pin it instead.
@@ -312,7 +312,7 @@ firmware itself is not built in CI (the ESP toolchain needs ~10 minutes and seve
 ## Project Structure
 
 ```
-esp32-c6-weathertrack/
+weathertrack-esp/
 ├── Cargo.toml                  # Workspace root (core only; firmware crates excluded)
 ├── cliff.toml                  # git-cliff changelog config
 ├── deny.toml, clippy.toml      # cargo-deny and clippy policy
