@@ -1,0 +1,4 @@
+[toolchain]
+# Xtensa (ESP32-S3) needs Espressif's Rust fork: `espup install --targets esp32s3`,
+# then `. ~/export-esp.sh` in the shell.
+channel = "esp"

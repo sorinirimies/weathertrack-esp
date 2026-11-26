@@ -1,0 +1,26 @@
+// Design tokens for the 320x172 WeatherTrack C6 UI (same palette as the 7" P4 UI).
+
+export global Theme {
+    out property <color> bg-top: #0a1327;
+    out property <color> bg-bottom: #101f3d;
+    out property <color> card: #16233f;
+    out property <color> card-border: #2a3d66;
+    out property <color> track: #0d1730;
+    out property <color> text: #eef3ff;
+    out property <color> muted: #8fa3cc;
+    out property <color> faint: #5b6d94;
+    out property <color> accent: #4cc9f0;
+    out property <color> warm: #ffb703;
+    out property <color> good: #4ade80;
+    out property <color> rain: #38bdf8;
+    out property <string> font: "Noto Sans";
+    out property <string> icon-font: "Weather Icons";
+
+    pure public function temp-color(t: float) -> color {
+        return t < 0 ? #7dd3fc : t < 10 ? #67e8f9 : t < 18 ? #a7f3d0 : t < 26 ? #fde047 : t < 33 ? #fb923c : #f87171;
+    }
+
+    pure public function uv-color(v: float) -> color {
+        return v < 3 ? #4ade80 : v < 6 ? #facc15 : v < 8 ? #fb923c : v < 11 ? #ef4444 : #a855f7;
+    }
+}

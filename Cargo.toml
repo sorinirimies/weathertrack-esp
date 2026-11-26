@@ -8,6 +8,7 @@ exclude = [
     "crates/weathertrack-gui",
     "crates/weathertrack-hal",
     "crates/weathertrack-p4",
+    "crates/weathertrack-s3",
     "crates/weathertrack-p4-preview",
     "crates/weathertrack-tui-preview",
     "crates/weathertrack-gui-preview",
@@ -21,8 +22,8 @@ edition = "2024"
 rust-version = "1.90"
 license = "MIT"
 authors = ["Sorin Albu-Irimies"]
-repository = "https://github.com/sorinirimies/esp32-c6-weathertrack"
-homepage = "https://github.com/sorinirimies/esp32-c6-weathertrack"
+repository = "https://github.com/sorinirimies/weathertrack-esp"
+homepage = "https://github.com/sorinirimies/weathertrack-esp"
 
 [workspace.dependencies]
 weathertrack-core = { path = "crates/weathertrack-core", version = "0.1.0" }

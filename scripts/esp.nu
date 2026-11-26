@@ -31,6 +31,25 @@ export def c6_sdkconfig [partitions: string]: nothing -> string {
     ] | str join "\n" | $"($in)\n"
 }
 
+# sdkconfig.defaults for the ESP32-S3 crate (16 MB flash); `partitions` is the absolute path of its CSV.
+export def s3_sdkconfig [partitions: string]: nothing -> string {
+    c6_sdkconfig $partitions
+    | str replace "CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y" "CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y"
+    | str replace 'CONFIG_ESPTOOLPY_FLASHSIZE="8MB"' 'CONFIG_ESPTOOLPY_FLASHSIZE="16MB"'
+    | $in + "\n# 8 MB octal PSRAM (ESP32-S3R8): big buffers go there, small ones stay in fast RAM.\nCONFIG_SPIRAM=y\nCONFIG_SPIRAM_MODE_OCT=y\nCONFIG_SPIRAM_SPEED_80M=y\nCONFIG_SPIRAM_USE_MALLOC=y\nCONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096\nCONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768\n"
+}
+
+# espflash arguments for the S3 (16 MB flash). `port` empty = let espflash pick.
+export def s3_flash_args [bootloader: path, image: path, port: string, monitor: bool]: nothing -> list<string> {
+    let base = [
+        "flash" "--chip" "esp32s3" "--flash-size" "16mb" "--partition-table" "partitions.csv"
+        "--bootloader" $bootloader
+    ]
+    let port_args = if ($port | is-empty) { [] } else { ["--port" $port] }
+    let monitor_args = if $monitor { ["--monitor"] } else { [] }
+    [...$base ...$port_args ...$monitor_args $image]
+}
+
 # The P4 template with its @PARTITIONS@ placeholder filled in.
 export def p4_sdkconfig [template: string, partitions: string]: nothing -> string {
     $template | str replace --all "@PARTITIONS@" $partitions
@@ -38,7 +57,10 @@ export def p4_sdkconfig [template: string, partitions: string]: nothing -> strin
 
 # The newest IDF-built bootloader under a release build dir, or null.
 export def newest_bootloader [build_dir: path]: nothing -> any {
-    let found = glob ($build_dir | path join "esp-idf-sys" "*" "out" "build" "bootloader" "bootloader.bin")
+    let found = [
+        (glob ($build_dir | path join "esp-idf-sys" "*" "out" "build" "bootloader" "bootloader.bin"))
+        (glob ($build_dir | path join "esp-idf-sys-*" "out" "build" "bootloader" "bootloader.bin"))
+    ] | flatten
     if ($found | is-empty) { return null }
     $found | each {|f| { path: $f, modified: (ls $f | get modified.0) } } | sort-by modified | last | get path
 }
@@ -112,6 +134,23 @@ def "main gen-sdkconfig" [] {
         c6_sdkconfig $csv | save -f $out
         print $"Generated ($out) \(partition: ($csv))"
     }
+}
+
+def "main gen-sdkconfig-s3" [] {
+    let dir = $ROOT | path join crates weathertrack-s3
+    let csv = $dir | path join partitions.csv | path expand
+    s3_sdkconfig $csv | save -f ($dir | path join sdkconfig.defaults)
+    print $"Generated ($dir | path join sdkconfig.defaults)"
+}
+
+# Flash the release build of the S3 firmware: `just build-s3-release` first.
+def "main flash-s3" [--port: string = "", --no-monitor] {
+    let dir = $ROOT | path join crates weathertrack-s3
+    let out = $dir | path join target xtensa-esp32s3-espidf release
+    let bl = newest_bootloader ($out | path join build)
+    if $bl == null { error make { msg: $"bootloader.bin not found under ($out)/build; run `just build-s3-release`" } }
+    cd $dir
+    ^espflash ...(s3_flash_args $bl ($out | path join weathertrack-s3) $port (not $no_monitor))
 }
 
 def "main gen-sdkconfig-p4" [] {

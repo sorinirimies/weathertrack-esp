@@ -1,0 +1,300 @@
+// WeatherTrack — Waveshare ESP32-S3-Touch-AMOLED-1.8 (368x448, portrait, touch) UI.
+
+import "fonts/weather-icons.ttf";
+import "fonts/NotoSans-Regular.ttf";
+import "fonts/NotoSans-Bold.ttf";
+
+import { Theme } from "theme.slint";
+import { CurrentData, HourData, DayData, AlertData, PlaceData } from "types.slint";
+import { Card, Caption, Meter } from "card.slint";
+
+export { CurrentData, HourData, DayData, AlertData, PlaceData }
+
+component Stat inherits Card {
+    in property <string> title;
+    in property <string> value;
+    Caption { x: 12px; y: 8px; text: root.title; }
+    Text {
+        x: 12px;
+        y: 26px;
+        width: parent.width - 24px;
+        text: root.value;
+        font-family: Theme.font;
+        font-size: 19px;
+        font-weight: 700;
+        color: Theme.text;
+        overflow: elide;
+    }
+}
+
+component Row inherits Rectangle {
+    in property <string> title;
+    in property <string> value;
+    height: 40px;
+    Text {
+        x: 6px;
+        y: (parent.height - self.height) / 2;
+        text: root.title;
+        font-family: Theme.font;
+        font-size: 17px;
+        color: Theme.muted;
+    }
+    Text {
+        x: parent.width - 6px - self.width;
+        y: (parent.height - self.height) / 2;
+        text: root.value;
+        font-family: Theme.font;
+        font-size: 19px;
+        font-weight: 700;
+        color: Theme.text;
+    }
+}
+
+component Tab inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback tapped();
+    background: root.active ? Theme.card : transparent;
+    border-radius: 14px;
+    Text {
+        width: parent.width;
+        y: (parent.height - self.height) / 2;
+        horizontal-alignment: center;
+        text: root.label;
+        font-family: Theme.font;
+        font-size: 15px;
+        font-weight: 700;
+        color: root.active ? Theme.accent : Theme.faint;
+    }
+    TouchArea { clicked => { root.tapped(); } }
+}
+
+export component WeatherApp inherits Window {
+    in property <bool> loading: true;
+    in property <string> loading-status: "Starting...";
+
+    in property <CurrentData> current;
+    in property <PlaceData> place;
+    in property <[HourData]> hours;
+    in property <[DayData]> days;
+    in property <[AlertData]> alerts;
+    in property <image> hourly-chart;
+    in property <image> sun-arc;
+    in property <float> hourly-min;
+    in property <float> hourly-max;
+    in property <float> week-min;
+    in property <float> week-max;
+    in property <bool> offline: false;
+    // 0 now, 1 hours, 2 week, 3 details
+    in-out property <int> page: 0;
+
+    width: 280px;
+    height: 456px;
+    background: @linear-gradient(180deg, Theme.bg-top 0%, Theme.bg-bottom 100%);
+    default-font-family: Theme.font;
+
+    // Icon glyphs are chosen at runtime and Slint only embeds glyphs that appear as literals.
+    Text { visible: false; font-family: Theme.icon-font; font-size: 28px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+    Text { visible: false; font-family: Theme.icon-font; font-size: 36px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+    Text { visible: false; font-family: Theme.icon-font; font-size: 96px; text: "\u{f00d}\u{f013}\u{f014}\u{f019}\u{f01a}\u{f01b}\u{f01e}\u{f056}\u{f063}\u{f0b6}"; }
+
+    if loading: Rectangle {
+        Text {
+            y: 120px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "\u{f00d}";
+            font-family: Theme.icon-font;
+            font-size: 96px;
+            color: Theme.warm;
+        }
+        Text {
+            y: 240px;
+            width: parent.width;
+            horizontal-alignment: center;
+            text: "WeatherTrack";
+            font-size: 28px;
+            font-weight: 700;
+            color: Theme.text;
+        }
+        Text {
+            x: 20px;
+            y: 284px;
+            width: parent.width - 40px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            text: root.loading-status;
+            font-size: 16px;
+            color: Theme.muted;
+        }
+    }
+
+    if !loading: Rectangle {
+        // header
+        Text {
+            x: 16px;
+            y: 12px;
+            width: 140px;
+            text: root.current.location;
+            font-size: 22px;
+            font-weight: 700;
+            color: Theme.text;
+            overflow: elide;
+        }
+        Text {
+            x: parent.width - 16px - self.width;
+            y: 18px;
+            text: root.offline ? "Offline" : root.current.updated;
+            font-size: 14px;
+            font-weight: root.offline ? 700 : 400;
+            color: root.offline ? Theme.warm : Theme.faint;
+        }
+
+        // ── Now ──
+        if root.page == 0: Rectangle {
+            y: 48px;
+            height: 344px;
+            Text {
+                x: 20px;
+                y: 0px;
+                text: root.current.icon;
+                font-family: Theme.icon-font;
+                font-size: 96px;
+                color: Theme.warm;
+            }
+            Text {
+                x: 120px;
+                y: 0px;
+                width: parent.width - 130px;
+                horizontal-alignment: right;
+                text: root.current.temperature + "°";
+                font-size: 80px;
+                font-weight: 700;
+                color: Theme.temp-color(root.current.temp-val);
+            }
+            Text {
+                x: 16px;
+                y: 116px;
+                width: parent.width - 32px;
+                text: root.current.condition;
+                font-size: 26px;
+                font-weight: 700;
+                color: Theme.text;
+                overflow: elide;
+            }
+            Text {
+                x: 16px;
+                y: 150px;
+                text: "Feels " + root.current.feels-like + "°  H " + root.current.high + "°  L " + root.current.low + "°";
+                font-size: 17px;
+                color: Theme.muted;
+            }
+            Stat { x: 12px; y: 186px; width: 124px; height: 66px; title: "HUMIDITY"; value: Math.round(root.current.humidity) + " %"; }
+            Stat { x: 144px; y: 186px; width: 124px; height: 66px; title: "WIND"; value: root.current.wind-speed + " km/h " + root.current.wind-dir; }
+            Stat { x: 12px; y: 260px; width: 124px; height: 66px; title: "PRESSURE"; value: root.current.pressure; }
+            Stat { x: 144px; y: 260px; width: 124px; height: 66px; title: "UV"; value: Math.round(root.current.uv) + " " + root.current.uv-label; }
+        }
+
+        // ── Hours ──
+        if root.page == 1: Rectangle {
+            y: 48px;
+            height: 344px;
+            Card {
+                x: 12px;
+                y: 0px;
+                width: 256px;
+                height: 150px;
+                Caption { x: 12px; y: 8px; text: "NEXT 24 HOURS"; }
+                Text {
+                    x: parent.width - 12px - self.width;
+                    y: 6px;
+                    text: Math.round(root.hourly-min) + "° to " + Math.round(root.hourly-max) + "°";
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: Theme.text;
+                }
+                Image { x: 12px; y: 30px; width: 232px; height: 110px; source: root.hourly-chart; }
+            }
+            for h[i] in root.hours: Rectangle {
+                visible: i < 6;
+                x: 12px;
+                y: 158px + i * 29px;
+                width: 256px;
+                height: 29px;
+                Text { x: 8px; y: 3px; text: i == 0 ? "Now" : h.time; font-size: 16px; color: Theme.muted; }
+                Text { x: 70px; y: 0px; text: h.icon; font-family: Theme.icon-font; font-size: 24px; color: Theme.warm; }
+                Text { x: 120px; y: 1px; text: h.temp + "°"; font-size: 19px; font-weight: 700; color: Theme.temp-color(h.temp-val); }
+                Text { x: parent.width - 8px - self.width; y: 3px; text: h.rain-pct + " %"; font-size: 16px; color: h.rain-pct >= 50 ? Theme.rain : Theme.faint; }
+            }
+        }
+
+        // ── Week ──
+        if root.page == 2: Rectangle {
+            y: 48px;
+            height: 344px;
+            for d[i] in root.days: Rectangle {
+                visible: i < 7;
+                x: 12px;
+                y: i * 48px;
+                width: 256px;
+                height: 44px;
+                Rectangle { background: Theme.card; border-radius: 10px; }
+                Text { x: 12px; y: 11px; text: i == 0 ? "Today" : d.weekday; font-size: 18px; font-weight: 700; color: Theme.text; }
+                Text { x: 84px; y: 4px; text: d.icon; font-family: Theme.icon-font; font-size: 28px; color: Theme.warm; }
+                Text { x: 130px; y: 13px; text: d.rain-pct + " %"; font-size: 15px; color: d.rain-pct >= 50 ? Theme.rain : Theme.faint; }
+                Text { x: parent.width - 12px - self.width; y: 11px; text: d.low + "° / " + d.high + "°"; font-size: 18px; font-weight: 700; color: Theme.text; }
+            }
+        }
+
+        // ── Details ──
+        if root.page == 3: Rectangle {
+            y: 52px;
+            height: 332px;
+            Row { y: 0px; x: 12px; width: 256px; title: "Sunrise"; value: root.current.sunrise; }
+            Row { y: 42px; x: 12px; width: 256px; title: "Sunset"; value: root.current.sunset; }
+            Row { y: 84px; x: 12px; width: 256px; title: "Daylight"; value: root.current.daylight; }
+            Row { y: 126px; x: 12px; width: 256px; title: "Gusts"; value: root.current.gusts + " km/h"; }
+            Row { y: 168px; x: 12px; width: 256px; title: "Cloud cover"; value: Math.round(root.current.cloud) + " %"; }
+            Row { y: 210px; x: 12px; width: 256px; title: "Precipitation"; value: root.current.precip; }
+            Row { y: 252px; x: 12px; width: 256px; title: "Visibility"; value: root.current.visibility; }
+            Text {
+                x: 18px;
+                y: 298px;
+                text: root.place.coordinates + " · " + root.place.source;
+                font-size: 13px;
+                color: Theme.faint;
+            }
+        }
+    }
+
+    // ── Swipe left/right over the content to change tab ──
+    if !loading: TouchArea {
+        y: 0px;
+        height: 400px;
+        property <bool> done: false;
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down { self.done = false; }
+        }
+        moved => {
+            if !self.done && self.pressed {
+                if self.mouse-x - self.pressed-x < -40px && root.page < 3 {
+                    root.page += 1;
+                    self.done = true;
+                } else if self.mouse-x - self.pressed-x > 40px && root.page > 0 {
+                    root.page -= 1;
+                    self.done = true;
+                }
+            }
+        }
+    }
+
+    // ── Tab bar ──
+    if !loading: Rectangle {
+        y: 400px;
+        height: 48px;
+        Tab { x: 6px; width: 64px; height: 44px; label: "Now"; active: root.page == 0; tapped => { root.page = 0; } }
+        Tab { x: 72px; width: 64px; height: 44px; label: "Hours"; active: root.page == 1; tapped => { root.page = 1; } }
+        Tab { x: 138px; width: 64px; height: 44px; label: "Week"; active: root.page == 2; tapped => { root.page = 2; } }
+        Tab { x: 204px; width: 64px; height: 44px; label: "More"; active: root.page == 3; tapped => { root.page = 3; } }
+    }
+}

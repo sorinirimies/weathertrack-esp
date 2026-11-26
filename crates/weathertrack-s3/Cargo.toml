@@ -1,0 +1,43 @@
+[package]
+name = "weathertrack-s3"
+version = "0.1.0"
+edition = "2021"
+authors = ["Sorin Irimies"]
+license = "MIT"
+resolver = "2"
+rust-version = "1.77"
+description = "WeatherTrack for an ESP32-S3: headless (web dashboard + serial log), shares the core with the C6/P4 builds"
+
+[[bin]]
+name = "weathertrack-s3"
+harness = false
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true
+opt-level = "z"
+
+[dependencies]
+weathertrack-core = { path = "../weathertrack-core", default-features = false }
+weathertrack-hal = { path = "../weathertrack-hal", default-features = false }
+weathertrack-view = { path = "../weathertrack-view" }
+log = "0.4"
+esp-idf-svc = { version = "0.51", features = ["experimental"] }
+esp-idf-hal = "0.45.2"
+anyhow = "1"
+slint = { version = "1.11", default-features = false, features = [
+    "compat-1-2",
+    "renderer-software",
+    "unsafe-single-threaded",
+    "libm",
+] }
+
+[build-dependencies]
+embuild = "0.33"
+toml = "0.8"
+slint-build = "1.11"
+
+[package.metadata.cargo-machete]
+ignored = ["weathertrack-view"]

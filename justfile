@@ -1,4 +1,4 @@
-# WeatherTrack (esp32-c6-weathertrack) — task runner
+# WeatherTrack (weathertrack-esp) — task runner
 # Recipes run in Nushell; anything longer than a line lives in scripts/*.nu (tested).
 # Install: cargo install just nu git-cliff   — then `just install-tools`
 # Usage:   just <task>
@@ -39,6 +39,14 @@ build-release:
 # Generate the C6 crates' sdkconfig.defaults (absolute partition paths, machine-specific)
 gen-sdkconfig:
     nu scripts/esp.nu gen-sdkconfig
+
+# ESP32-S3 (headless, web dashboard): needs the Xtensa toolchain (`espup install --targets esp32s3`).
+build-s3-release:
+    nu scripts/esp.nu gen-sdkconfig-s3
+    bash -c '. ~/export-esp.sh && cd crates/weathertrack-s3 && cargo build --release'
+
+flash-s3 port="": build-s3-release
+    nu scripts/esp.nu flash-s3 --port "{{ port }}"
 
 # Build the TUI firmware (ESP32-C6)
 build-tui: gen-sdkconfig
